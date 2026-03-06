@@ -1,0 +1,42 @@
+<header>
+    <h1>Hospital Simulator Game</h1>
+    
+    <p id="intro-text">You are a doctor at UCSF. Your goal is to diagnose patients correctly throughout your shift. Each interaction will test your medical knowledge and decision making skills. You will receive breaks where you can decide to either do nothing or see telemedicine patients. Good luck!</p>
+    </header>
+    
+    <div class="main">
+    <div id="game-view" class="game-view hidden">
+    <h2 id="scene-title">Introduction</h2>
+    
+    <div id="game-status">
+    <p id="score">Score: 0</p>
+    
+    <p id="timer">Time: 00:00</p>
+    </div>
+    
+    <div id="break-timer" class="break-timer">&nbsp;</div>
+    
+    <p id="telemedicine-count" class="hidden">Telemedicine Sessions: 0</p>
+    
+    <p id="final-score" class="hidden">Final Score: 0</p>
+    
+    <p id="scene-story">&nbsp;</p>
+    
+    <div id="disease-chart" class="disease-chart">&nbsp;</div>
+    
+    <div id="choices" class="choices">&nbsp;</div>
+    </div>
+    <button id="start-button">Start Game</button>
+    
+    <div id="game-over" class="game-over hidden">
+    <div class="game-over-card">
+    <h2>Game Over!</h2>
+    
+    <p id="final-message">Thank you for playing.</p>
+    <button id="restart-game-btn" class="hidden">Restart</button></div>
+    </div>
+    </div>
+    
+    <div id="slider-container" class="slideContainer hidden"><input value="0" type="range" min="0" max="100" id="myRange" class="slider">
+    <p>Calculated Value: <span id="value">50</span></p>
+    </div>
