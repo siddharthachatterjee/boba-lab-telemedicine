@@ -1,3 +1,7 @@
+// =============================================================================
+// Base classes — identical to index.js
+// =============================================================================
+
 class GameInstance {
     constructor(config) {
         this.Q = config.Q;
@@ -116,6 +120,7 @@ class GameInstance {
                     submitBtn.alreadyCorrect = true;
                     document.getElementById('score').textContent = 'Score: ' + this.score;
                 }
+                this.onSliderSubmit(true);
                 document.getElementById('slider-container').classList.add('hidden');
                 submitBtn.style.display = 'none';
                 let nextButton = document.createElement('button');
@@ -125,6 +130,7 @@ class GameInstance {
             } else {
                 document.getElementById('scene-story').textContent = "Incorrect. Try again. " + questionPrompt;
                 submitBtn.alreadyCorrect = false;
+                this.onSliderSubmit(false);
             }
         };
         container.appendChild(submitBtn);
@@ -154,6 +160,7 @@ class GameInstance {
                         this.score += 1;
                         document.getElementById('score').textContent = 'Score: ' + this.score;
                     }
+                    this.onChoiceMade(sceneKey, choice.next);
                     this.displayScene(choice.next);
                 };
                 choicesContainer.appendChild(btn);
@@ -162,6 +169,9 @@ class GameInstance {
 
         this.showGameView();
     }
+
+    onChoiceMade(_fromKey, _toKey) {}  // hook — override in subclasses
+    onSliderSubmit(_correct) {}        // hook — override in subclasses
 
     showGameView() {
         document.getElementById('game-view').classList.remove('hidden');
@@ -176,7 +186,7 @@ class GameInstance {
 
     getStats() {
         const duration = this.startTime ? Date.now() - this.startTime : 0;
-        return { score: this.score, telemedicineCount: this.telemedicineCount, duration };
+        return { score: this.score, telemedicineCount: this.telemedicineCount, duration: duration };
     }
 
     start() {
@@ -189,8 +199,6 @@ class GameInstance {
     }
 }
 
-
-// Represents a loadable task type (e.g. telemedicine, uber driving)
 class TaskType {
     constructor(config) {
         this.id = config.id;
@@ -212,7 +220,6 @@ class TaskType {
     }
 }
 
-// Tracks performance stats across sessions and task types
 class PerformanceTracker {
     constructor() {
         this.sessions = [];
@@ -233,7 +240,6 @@ class PerformanceTracker {
     }
 }
 
-// Manages multiple TaskTypes, switching between them, and computing similarity
 class TaskManager {
     constructor(tracker) {
         this.tasks = {};
@@ -246,7 +252,6 @@ class TaskManager {
         this.tasks[taskType.id] = taskType;
     }
 
-    // Jaccard similarity: |intersection| / |union| of action item types
     similarityScore(taskIdA, taskIdB) {
         const a = this.tasks[taskIdA].actionItemTypes;
         const b = this.tasks[taskIdB].actionItemTypes;
@@ -257,7 +262,7 @@ class TaskManager {
 
     async switchTo(taskId, Q) {
         const task = this.tasks[taskId];
-        if (!task) throw new Error(`Unknown task: ${taskId}`);
+        if (!task) throw new Error('Unknown task: ' + taskId);
         if (!task.scenesData) await task.load();
 
         if (this.activeGame) {
@@ -266,7 +271,7 @@ class TaskManager {
 
         this.activeTaskId = taskId;
         this.activeGame = new GameInstance({
-            Q,
+            Q: Q,
             startScene: task.scenesData.startScene,
             scenes: task.scenesData.scenes,
             onEnd: (stats) => this.tracker.record(taskId, stats)
@@ -276,50 +281,291 @@ class TaskManager {
 }
 
 
+// =============================================================================
+// Extensions — Main Job / Side Job mechanic
+// =============================================================================
+
+class SideJob {
+    constructor(config) {
+        this.name = config.name;
+        this.actionItem = config.actionItem;   // action item type shared with the main job
+        this.reward = config.reward;
+        this.similarity = config.similarity || 0; // similarity score vs main job (0–1)
+        this.startScene = config.startScene || null;        // fixed start scene key
+        this.startSceneMap = config.startSceneMap || null;  // map returnScene → startScene
+    }
+}
+
+class MainJobGameInstance extends GameInstance {
+    constructor(config) {
+        super(config);
+        this.sideJobs = config.sideJobs || [];
+        this.sideJobRewardsTotal = 0;
+        this.continuousWorkTime = 0;
+        this.continuousWorkInterval = null;
+        this.onBreak = false;
+        this.onSideJob = false;
+        this.pendingReturnScene = null;
+        this.activeSideJob = null;
+        this.totalCorrect = 0;
+        this.totalAttempts = 0;
+        this.mainJobRewardRate = 10;
+        this.mainJobRewardsTotal = 0;
+        this.telemedicineReward = 7;
+    }
+
+    get totalReward() {
+        return this.mainJobRewardsTotal + this.sideJobRewardsTotal;
+    }
+
+    startContinuousWorkTimer() {
+        this.continuousWorkInterval = setInterval(() => {
+            if (!this.onBreak && !this.onSideJob) {
+                this.continuousWorkTime++;
+                this.updateContinuousWorkDisplay();
+            }
+        }, 1000);
+    }
+
+    resetContinuousWorkTime() {
+        this.continuousWorkTime = 0;
+        this.updateContinuousWorkDisplay();
+    }
+
+    updateContinuousWorkDisplay() {
+        const el = document.getElementById('continuous-work-time');
+        if (!el) return;
+        const minutes = Math.floor(this.continuousWorkTime / 60);
+        const seconds = this.continuousWorkTime % 60;
+        el.textContent = 'Continuous Work: ' +
+            (minutes < 10 ? '0' : '') + minutes + ':' +
+            (seconds < 10 ? '0' : '') + seconds;
+    }
+
+    get accuracy() {
+        return this.totalAttempts === 0 ? 0 : Math.round((this.totalCorrect / this.totalAttempts) * 100);
+    }
+
+    updateTotalRewardDisplay() {
+        const el = document.getElementById('total-reward');
+        if (el) el.textContent = 'Total Reward: ' + this.totalReward;
+    }
+
+    updateAccuracyDisplay() {
+        const el = document.getElementById('accuracy');
+        if (el) el.textContent = 'Accuracy: ' + this.accuracy + '%';
+    }
+
+    onChoiceMade(_fromKey, toKey) {
+        if (toKey.includes('Correct') || toKey.includes('Wrong')) {
+            this.totalAttempts++;
+            if (toKey.includes('Correct')) {
+                this.totalCorrect++;
+                if (this.onBreak) {
+                    this.sideJobRewardsTotal += this.telemedicineReward;
+                } else {
+                    this.mainJobRewardsTotal += this.mainJobRewardRate;
+                }
+                this.updateTotalRewardDisplay();
+            }
+            this.updateAccuracyDisplay();
+        }
+    }
+
+    onSliderSubmit(correct) {
+        this.totalAttempts++;
+        if (correct) {
+            this.totalCorrect++;
+            if (this.onSideJob && this.activeSideJob) {
+                this.sideJobRewardsTotal += this.activeSideJob.reward || 0;
+            } else {
+                this.mainJobRewardsTotal += this.mainJobRewardRate;
+            }
+            this.updateTotalRewardDisplay();
+        }
+        this.updateAccuracyDisplay();
+    }
+
+    // Override: handle __return__ sentinel, manage onBreak/onSideJob state,
+    // and inject the break choice after the scene renders
+    displayScene(sceneKey) {
+        if (sceneKey === '__return__') {
+            sceneKey = this.pendingReturnScene;
+            this.onSideJob = false;
+            this.activeSideJob = null;
+        }
+
+        const scene = this.scenes[sceneKey];
+        const breakItem = scene.actionItems && scene.actionItems.find(item => item.type === 'breakTimer');
+
+        if (breakItem && !this.onBreak) {
+            this.onBreak = true;
+            this.resetContinuousWorkTime();
+        } else if (!breakItem && this.onBreak && !this.onSideJob) {
+            this.onBreak = false;
+        }
+
+        super.displayScene(sceneKey);
+        this.updateTotalRewardDisplay();
+
+        if (breakItem) {
+            this.showBreakChoice(breakItem);
+        }
+    }
+
+    // Appends side job buttons (sorted by similarity desc) and a Stay on Break button
+    showBreakChoice(breakItem) {
+        const container = document.getElementById('choices');
+
+        const sorted = this.sideJobs.slice().sort((a, b) => b.similarity - a.similarity);
+        sorted.forEach(job => {
+            const btn = document.createElement('button');
+            btn.textContent = job.name +
+                ' — Reward: ' + job.reward +
+                ' | Trains: ' + job.actionItem;
+            btn.onclick = () => {
+                this.resetContinuousWorkTime();
+                container.innerHTML = '';
+                this.runSideJobAction(job, breakItem.expireScene);
+            };
+            container.appendChild(btn);
+        });
+
+        const stayBtn = document.createElement('button');
+        stayBtn.textContent = 'Stay on Break';
+        stayBtn.onclick = () => {
+            this.resetContinuousWorkTime();
+            container.innerHTML = '';
+        };
+        container.appendChild(stayBtn);
+    }
+
+    // Navigates into the side job's scene flow; '__return__' in those scenes maps back to returnScene
+    runSideJobAction(job, returnScene) {
+        this.stopBreakTimer();
+        this.pendingReturnScene = returnScene;
+        this.onSideJob = true;
+        this.activeSideJob = job;
+        const startScene = job.startScene ||
+            (job.startSceneMap && job.startSceneMap[returnScene]);
+        this.displayScene(startScene);
+    }
+
+    // Also stop the continuousWorkTimer when the main timer stops
+    stopTimer() {
+        super.stopTimer();
+        clearInterval(this.continuousWorkInterval);
+    }
+
+    storeGameData() {
+        super.storeGameData();
+        Qualtrics.SurveyEngine.setEmbeddedData('totalReward', this.totalReward);
+        Qualtrics.SurveyEngine.setEmbeddedData('continuousWorkTime', this.continuousWorkTime);
+        Qualtrics.SurveyEngine.setEmbeddedData('accuracy', this.accuracy);
+    }
+
+    getStats() {
+        return {
+            score: this.score,
+            telemedicineCount: this.telemedicineCount,
+            duration: this.startTime ? Date.now() - this.startTime : 0,
+            totalReward: this.totalReward,
+            continuousWorkTime: this.continuousWorkTime,
+            accuracy: this.accuracy
+        };
+    }
+
+    start() {
+        this.mainJobRewardsTotal = 0;
+        this.sideJobRewardsTotal = 0;
+        this.continuousWorkTime = 0;
+        this.onBreak = false;
+        this.onSideJob = false;
+        this.activeSideJob = null;
+        this.totalCorrect = 0;
+        this.totalAttempts = 0;
+
+        // Inject persistent display elements into the sidebar, matching score/timer conventions
+        const sidebar = document.getElementById('progress-sidebar');
+        if (sidebar && !document.getElementById('total-reward')) {
+            const rewardEl = document.createElement('p');
+            rewardEl.id = 'total-reward';
+            rewardEl.textContent = 'Total Reward: 0';
+            sidebar.appendChild(rewardEl);
+        }
+        if (sidebar && !document.getElementById('continuous-work-time')) {
+            const workEl = document.createElement('p');
+            workEl.id = 'continuous-work-time';
+            workEl.textContent = 'Continuous Work: 00:00';
+            sidebar.appendChild(workEl);
+        }
+        if (sidebar && !document.getElementById('accuracy')) {
+            const accEl = document.createElement('p');
+            accEl.id = 'accuracy';
+            accEl.textContent = 'Accuracy: 0%';
+            sidebar.appendChild(accEl);
+        }
+
+        super.start();
+        this.startContinuousWorkTimer();
+    }
+}
+
+// Subclasses TaskManager to produce MainJobGameInstance instead of GameInstance
+class MainJobTaskManager extends TaskManager {
+    constructor(tracker, sideJobs) {
+        super(tracker);
+        this.sideJobs = sideJobs;
+    }
+
+    async switchTo(taskId, Q) {
+        const task = this.tasks[taskId];
+        if (!task) throw new Error('Unknown task: ' + taskId);
+        if (!task.scenesData) await task.load();
+
+        if (this.activeGame) {
+            this.tracker.record(this.activeTaskId, this.activeGame.getStats());
+        }
+
+        this.activeTaskId = taskId;
+        this.activeGame = new MainJobGameInstance({
+            Q: Q,
+            startScene: task.scenesData.startScene,
+            scenes: task.scenesData.scenes,
+            onEnd: (stats) => this.tracker.record(taskId, stats),
+            sideJobs: this.sideJobs
+        });
+        return this.activeGame;
+    }
+}
+
+
+// =============================================================================
+// Qualtrics entry point
+// =============================================================================
+
 Qualtrics.SurveyEngine.addOnload(function() {
     let Q = this;
     Q.disableNextButton();
 
+    const telemedicineJob = new SideJob({
+        name: 'Telemedicine',
+        actionItem: 'choices',
+        reward: 7,
+        similarity: 0.8,
+        startSceneMap: { 'breakEnd': 'telemedicine1', 'breakEnd2': 'telemedicine2' }
+    });
+    const medSchoolJob = new SideJob({ name: 'Medical School', actionItem: 'knowledge', reward: 0, similarity: 0.5, startScene: 'medSchoolStart' });
+    const uberJob = new SideJob({ name: 'Uber', actionItem: 'slider', reward: 5, similarity: 0.3, startScene: 'uberStart' });
+
     const tracker = new PerformanceTracker();
-    const taskManager = new TaskManager(tracker);
+    const taskManager = new MainJobTaskManager(tracker, [telemedicineJob, medSchoolJob, uberJob]);
 
     taskManager.register(new TaskType({ id: 'telemedicine', name: 'Telemedicine', scenesData: TELEMEDICINE_SCENES }));
-    // Register additional task types here, e.g.:
-    // taskManager.register(new TaskType({ id: 'uber', name: 'Uber Driving', scenesData: UBER_SCENES }));
 
-    const allTasks = Object.values(taskManager.tasks);
-    const taskGrid = document.getElementById('task-grid');
-
-    Promise.all(allTasks.map(t => t.load()))
-        .then(() => taskManager.switchTo('telemedicine', Q))
-        .then(() => {
-            allTasks.forEach(task => {
-                const card = document.createElement('div');
-                card.className = 'task-card';
-
-                const title = document.createElement('h3');
-                title.textContent = task.name;
-                card.appendChild(title);
-
-                const tagsDiv = document.createElement('div');
-                tagsDiv.className = 'task-tags';
-                task.actionItemTypes.forEach(type => {
-                    const tag = document.createElement('span');
-                    tag.className = 'action-tag';
-                    tag.textContent = type;
-                    tagsDiv.appendChild(tag);
-                });
-                card.appendChild(tagsDiv);
-
-                const btn = document.createElement('button');
-                btn.textContent = 'Start Task';
-                btn.onclick = () => taskManager.activeGame.start();
-                card.appendChild(btn);
-
-                taskGrid.appendChild(card);
-            });
-        })
-        .catch(err => { console.error('Failed to load tasks:', err); });
+    taskManager.switchTo('telemedicine', Q)
+        .then(() => { taskManager.activeGame.start(); })
+        .catch(err => { console.error('Failed to load task:', err); });
 
     function hideEl(element) {
         element.hide();
@@ -402,9 +648,8 @@ const TELEMEDICINE_SCENES = {
         },
         startBreak: {
             title: "Break #1",
-            story: "You're back in the breakroom. You have two options: 1) Enjoy yourself      2) Work on telemedicine until your next rotation",
-            actionItems: [{ type: 'breakTimer', duration: 20, expireScene: 'breakEnd' }],
-            choices: [{ text: "Work on Telemedicine", next: 'telemedicine1' }]
+            story: "You may choose any side job to work on, or enjoy a break. Side jobs are listed by similarity to your main job.",
+            actionItems: [{ type: 'breakTimer', duration: 20, expireScene: 'breakEnd' }]
         },
         breakRoom: {
             title: "Breakroom",
@@ -453,13 +698,13 @@ const TELEMEDICINE_SCENES = {
             title: "Correct",
             story: "Jaime's symptoms suggest the flu.",
             actionItems: [{ type: 'incrementTelemedicine' }],
-            choices: [{ text: "Return to Break room", next: 'breakRoom' }]
+            choices: [{ text: "Return to Break room", next: '__return__' }]
         },
         telePatient1_2Wrong: {
             title: "Incorrect",
             story: "Jaime's symptoms are not indicative of a migraine.",
             actionItems: [{ type: 'incrementTelemedicine' }],
-            choices: [{ text: "Return to Break room", next: 'breakRoom' }]
+            choices: [{ text: "Return to Break room", next: '__return__' }]
         },
         patient4: {
             title: "Patient 4",
@@ -481,11 +726,10 @@ const TELEMEDICINE_SCENES = {
         },
         startBreak2: {
             title: "Break #2",
-            story: "You're back in the breakroom. You have two options: 1) Enjoy yourself      2) Work on telemedicine until your next rotation",
-            actionItems: [{ type: 'breakTimer', duration: 20, expireScene: 'breakEnd2' }],
-            choices: [{ text: "Work on Telemedicine", next: 'telemedicine2' }]
+            story: "You may choose any side job to work on, or enjoy a break. Side jobs are listed by similarity to your main job.",
+            actionItems: [{ type: 'breakTimer', duration: 20, expireScene: 'breakEnd2' }]
         },
-        breakEnd2: {
+        breakEnd2z: {
             title: "Break Over",
             story: "Your break is over. Time to get back to work!",
             actionItems: [{ type: 'stopBreakTimer' }],
@@ -528,13 +772,13 @@ const TELEMEDICINE_SCENES = {
             title: "Correct",
             story: "Linda's symptoms suggest the flu.",
             actionItems: [{ type: 'incrementTelemedicine' }],
-            choices: [{ text: "Return to Break room", next: 'breakRoom' }]
+            choices: [{ text: "Return to Break room", next: '__return__' }]
         },
         telePatient2_2Wrong: {
             title: "Incorrect",
             story: "Linda's symptoms are not indicative of a migraine.",
             actionItems: [{ type: 'incrementTelemedicine' }],
-            choices: [{ text: "Return to Break room", next: 'breakRoom' }]
+            choices: [{ text: "Return to Break room", next: '__return__' }]
         },
         patient5: {
             title: "Patient 5",
@@ -558,6 +802,42 @@ const TELEMEDICINE_SCENES = {
             title: "Day 1 Finished!",
             story: "Another day, another diagnosis...",
             actionItems: [{ type: 'endGame' }]
+        },
+
+        // ── Medical School placeholder scene ─────────────────────────────────
+        medSchoolStart: {
+            title: "Medical School",
+            story: "Review the disease reference table below.",
+            chart: `<table>
+                <tr><th>Disease</th><th>Symptoms</th></tr>
+                <tr><td>Pneumonia</td><td>Coughing, Fever, Chills, Shortness of breath</td></tr>
+                <tr><td>Stroke</td><td>Weakness in one arm, Slurred speech</td></tr>
+                <tr><td>Heart Attack</td><td>Chest pain, Shortness of breath</td></tr>
+                <tr><td>Anxiety Attack</td><td>Rapid heart rate, Sweating, Trembling</td></tr>
+            </table>`,
+            choices: [{ text: "Return to break", next: '__return__' }]
+        },
+
+        // ── Uber placeholder scenes ───────────────────────────────────────────
+        uberStart: {
+            title: "Uber: New Shift",
+            story: "You've accepted a driving shift. Complete 3 fare estimates to finish your session.",
+            choices: [{ text: "Start driving", next: 'uberRide1' }]
+        },
+        uberRide1: {
+            title: "Uber Ride 1",
+            story: "Passenger A: short trip across town. Set the fare meter.",
+            actionItems: [{ type: 'slider', correctValue: 0, nextScene: 'uberRide2', hint: 'Placeholder fare — just submit.' }]
+        },
+        uberRide2: {
+            title: "Uber Ride 2",
+            story: "Passenger B: medium trip to the airport. Set the fare meter.",
+            actionItems: [{ type: 'slider', correctValue: 0, nextScene: 'uberRide3', hint: 'Placeholder fare — just submit.' }]
+        },
+        uberRide3: {
+            title: "Uber Ride 3",
+            story: "Passenger C: long trip across the city. Final fare of the session.",
+            actionItems: [{ type: 'slider', correctValue: 0, nextScene: '__return__', hint: 'Placeholder fare — just submit.' }]
         }
     }
 };

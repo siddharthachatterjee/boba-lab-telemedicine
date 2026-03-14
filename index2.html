@@ -45,14 +45,14 @@
 </style>
 
 <header>
-    <h1>FOW Crowdsourcing Game</h1>
-    <p id="intro-text">Welcome to the Future of Work Crowdsourcing simulator! Pick from any of the available tasks below.</p>
+    <h1>FOW Main Job / Side Job Game</h1>
+    <p id="intro-text">Welcome to the Future of Work simulator! Work your main job and decide during breaks whether to pick up a side job or rest.</p>
 </header>
 
 <div id="app-layout">
 
     <main id="main-content">
-        <!-- Game view: hidden until a task is started -->
+        <!-- Game view: starts immediately -->
         <div id="game-view" class="game-view hidden">
             <h2 id="scene-title">Introduction</h2>
             <div id="break-timer" class="break-timer">&nbsp;</div>
@@ -63,7 +63,7 @@
             <div id="choices" class="choices">&nbsp;</div>
         </div>
 
-        <!-- Task grid: populated by JS from registered TaskTypes -->
+        <!-- Task grid: not used in this version -->
         <div id="task-grid"></div>
     </main>
 
