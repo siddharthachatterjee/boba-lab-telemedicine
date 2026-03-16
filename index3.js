@@ -292,7 +292,6 @@ class SideJob {
         this.reward = config.reward;
         this.similarity = config.similarity || 0; // similarity score vs main job (0–1)
         this.startScene = config.startScene || null;        // fixed start scene key
-        this.startScenes = config.startScenes || null;      // array of start scenes (picked randomly)
         this.startSceneMap = config.startSceneMap || null;  // map returnScene → startScene
     }
 }
@@ -319,13 +318,6 @@ class MainJobGameInstance extends GameInstance {
         this.patientResults = [];    // { scene, answer, correct, skipped } per main-job patient
         this.sideJobSessions = [];   // { jobName, reward, correct, attempts } per side-job run
         this.currentSideJobSession = null;
-        this.dayIndex = 0;           // 0-4 (Mon-Fri)
-        this.shiftIndex = 0;         // 0-2 (shift 1-3 within day)
-        this.patientsThisShift = 0;  // patients seen in current shift
-        this.autoAdvanceTimeout = null;
-        this.autoAdvanceCountdownInterval = null;
-        this.inactivityTimeout = null;
-        this.timerStartMs = null;
     }
 
     get totalReward() {
@@ -346,33 +338,22 @@ class MainJobGameInstance extends GameInstance {
         this.updateContinuousWorkDisplay();
     }
 
-    // Override: 1 real second = 1 game minute, starting 9:00 AM; resettable via resetDayClock()
+    // Override base startTimer to show 9 AM clock format
     startTimer() {
-        this.timerStartMs = Date.now();
+        const startMs = Date.now();
+        const BASE_SEC = 9 * 3600;
         this.timerInterval = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - this.timerStartMs) / 1000);
-            const totalMin = 9 * 60 + elapsed;          // 9:00 AM base + elapsed minutes
-            const h24 = Math.floor(totalMin / 60) % 24;
-            const m   = totalMin % 60;
+            const elapsed = Math.floor((Date.now() - startMs) / 1000);
+            const total = BASE_SEC + elapsed;
+            const h24 = Math.floor(total / 3600) % 24;
+            const m   = Math.floor((total % 3600) / 60);
+            const s   = total % 60;
             const ampm = h24 >= 12 ? 'PM' : 'AM';
             const h12  = h24 > 12 ? h24 - 12 : (h24 === 0 ? 12 : h24);
             const el = document.getElementById('timer');
-            if (el) el.textContent = h12 + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
+            if (el) el.textContent =
+                h12 + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s + ' ' + ampm;
         }, 1000);
-    }
-
-    resetDayClock() {
-        this.timerStartMs = Date.now();
-    }
-
-    setInactivityTimer(callback) {
-        clearTimeout(this.inactivityTimeout);
-        this.inactivityTimeout = setTimeout(callback, 5000);
-    }
-
-    clearInactivityTimer() {
-        clearTimeout(this.inactivityTimeout);
-        this.inactivityTimeout = null;
     }
 
     updateContinuousWorkDisplay() {
@@ -380,7 +361,8 @@ class MainJobGameInstance extends GameInstance {
         if (!el) return;
         const minutes = Math.floor(this.continuousWorkTime / 60);
         const seconds = this.continuousWorkTime % 60;
-        el.textContent = (minutes < 10 ? '0' : '') + minutes + ':' +
+        el.textContent = 'Continuous Work: ' +
+            (minutes < 10 ? '0' : '') + minutes + ':' +
             (seconds < 10 ? '0' : '') + seconds;
     }
 
@@ -395,7 +377,7 @@ class MainJobGameInstance extends GameInstance {
 
     updateAccuracyDisplay() {
         const el = document.getElementById('accuracy');
-        if (el) el.textContent = this.accuracy + '%';
+        if (el) el.textContent = 'Accuracy: ' + this.accuracy + '%';
     }
 
     updateCurrentJobDisplay() {
@@ -473,17 +455,12 @@ class MainJobGameInstance extends GameInstance {
         btn.textContent = 'Log In';
         btn.style.marginLeft = '8px';
         btn.onclick = () => {
-            this.clearInactivityTimer();
             if (input.value === password) {
                 container.innerHTML = '';
                 this.displayScene(item.nextScene);
             } else {
-                container.innerHTML = '';
-                const msgEl = document.createElement('p');
-                msgEl.style.color = '#c53030';
-                msgEl.textContent = 'Incorrect password — returning to shift.';
-                container.appendChild(msgEl);
-                setTimeout(() => this.displayScene('__return__'), 1000);
+                input.value = '';
+                err.style.display = '';
             }
         };
         container.appendChild(btn);
@@ -491,29 +468,14 @@ class MainJobGameInstance extends GameInstance {
 
     renderPatientSummary() {
         const LABELS = {
-            patient1:'John', patient2:'Jane', patient3:'Robert', patient4:'Ishan', patient5:'Alex',
-            patient6:'Maria', patient7:'Carlos', patient8:'Sarah', patient9:'David', patient10:'Lisa',
-            patient11:'Tom', patient12:'Emma', patient13:'James', patient14:'Sophie', patient15:'Michael',
-            patient16:'Hannah', patient17:'Chris', patient18:'Priya', patient19:'Kevin', patient20:'Amy',
-            alienPatient1:'Patient ZX-9', alienPatient2:'Patient QT-3',
-            alienPatient3:'Patient RX-5', alienPatient4:'Patient QK-7',
-            alienPatient5:'Patient ZT-2', alienPatient6:'Patient BM-4',
-            alienPatient7:'Patient YP-9', alienPatient8:'Patient LX-3',
-            alienPatient9:'Patient WZ-6', alienPatient10:'Patient FC-8'
+            patient1: 'John', patient2: 'Jane', patient3: 'Robert',
+            patient4: 'Ishan', patient5: 'Alex',
+            alienPatient1: 'Patient ZX-9', alienPatient2: 'Patient QT-3'
         };
         const CORRECT_DX = {
-            patient1:'Pneumonia', patient2:'Stroke', patient4:'Heart Attack',
-            patient5:'Heart Attack', patient6:'Flu', patient7:'Pneumonia',
-            patient8:'Anxiety Attack', patient9:'Stroke', patient10:'Migraine',
-            patient11:'Heart Attack', patient12:'Anxiety Attack', patient13:'Pneumonia',
-            patient14:'Migraine', patient15:'Stroke', patient16:'Flu',
-            patient17:'Heart Attack', patient18:'Anxiety Attack', patient19:'Stroke',
-            patient20:'Pneumonia',
-            alienPatient1:'Vorpal Syndrome', alienPatient2:'Null-Field Exposure',
-            alienPatient3:'Vorpal Syndrome', alienPatient4:'Null-Field Exposure',
-            alienPatient5:'Vorpal Syndrome', alienPatient6:'Null-Field Exposure',
-            alienPatient7:'Vorpal Syndrome', alienPatient8:'Null-Field Exposure',
-            alienPatient9:'Vorpal Syndrome', alienPatient10:'Null-Field Exposure'
+            patient1: 'Pneumonia', patient2: 'Stroke', patient3: 'Heart Attack',
+            patient4: 'Heart Attack', patient5: 'Heart Attack',
+            alienPatient1: 'Vorpal Syndrome', alienPatient2: 'Null-Field Exposure'
         };
 
         const th = 'style="padding:9px 14px;background:#2b6cb0;color:#fff;text-align:left;font-weight:600"';
@@ -798,19 +760,17 @@ class MainJobGameInstance extends GameInstance {
         this.updateAccuracyDisplay();
     }
 
-    // Override: sentinels, week structure, auto-advance, break choices, reference button
+    // Override: handle __return__ sentinel, manage onBreak/onSideJob state,
+    // and inject the break choice after the scene renders
     displayScene(sceneKey) {
-        // Cancel any pending auto-advance or inactivity timer from previous scene
-        clearTimeout(this.autoAdvanceTimeout);
-        clearInterval(this.autoAdvanceCountdownInterval);
-        clearTimeout(this.inactivityTimeout);
-        const breakTimerEl = document.getElementById('break-timer');
-        if (breakTimerEl) breakTimerEl.textContent = '';
-
-        // Intercept intro: show styled hero screen
-        if (sceneKey === 'intro') { this.showIntroScreen(); return; }
+        // Intercept intro: show styled hero screen instead of standard rendering
+        if (sceneKey === 'intro') {
+            this.showIntroScreen();
+            return;
+        }
 
         if (sceneKey === '__return__') {
+            sceneKey = this.pendingReturnScene;
             // Finalise side-job session tracking
             if (this.currentSideJobSession) {
                 const s = this.currentSideJobSession;
@@ -825,170 +785,31 @@ class MainJobGameInstance extends GameInstance {
             this.onSideJob = false;
             this.activeSideJob = null;
             this.updateCurrentJobDisplay();
-            sceneKey = this.pendingReturnScene;
         }
 
         if (sceneKey === '__nextPatient__') {
-            sceneKey = this.resolveNextPatient();
-        }
-
-        // Day transition: update dynamic title/story and reset clock
-        if (sceneKey === 'dayTransition') {
-            const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
-            const done = this.dayIndex - 1;
-            const next = this.dayIndex;
-            this.scenes.dayTransition.title = DAY_NAMES[done] + ' Complete!';
-            this.scenes.dayTransition.story = 'Great work today. Starting ' + DAY_NAMES[next] + ' tomorrow.';
-            this.resetDayClock();
-            this.updateDayDisplay();
-        }
-
-        // Shift display update on any patient scene or break
-        if (/^(patient|alienPatient|startBreak)/.test(sceneKey)) {
-            this.updateDayDisplay();
+            const n = this.patientsDone;
+            this.patientsDone++;
+            if      (n === 3) sceneKey = 'startBreak';
+            else if (n === 6) sceneKey = 'startBreak2';
+            else if (n === 9) sceneKey = 'endScene';
+            else              sceneKey = this.patientQueue.shift();
         }
 
         const scene = this.scenes[sceneKey];
-        const breakItem = scene.actionItems && scene.actionItems.find(i => i.type === 'breakTimer');
+        const breakItem = scene.actionItems && scene.actionItems.find(item => item.type === 'breakTimer');
 
         super.displayScene(sceneKey);
         this.updateTotalRewardDisplay();
 
-        // 5-second inactivity timer for interactive pages that don't have their own autoAdvance
-        if (!scene.autoAdvance) {
-            const hasChoices = scene.choices && scene.choices.length > 0;
-            const hasInteractiveItems = scene.actionItems && scene.actionItems.some(
-                i => i.type === 'slider' || i.type === 'teleLogin'
-            );
-            if (hasChoices || hasInteractiveItems) {
-                this.setInactivityTimer(() => {
-                    const storyEl = document.getElementById('scene-story');
-                    if (this.onSideJob) {
-                        if (storyEl) storyEl.textContent = 'Inactive — returning to shift.';
-                        setTimeout(() => this.displayScene('__return__'), 800);
-                    } else if (/^(patient|alienPatient)/.test(sceneKey)) {
-                        this.patientResults.push({ scene: sceneKey, answer: 'Inactive', correct: undefined, skipped: true });
-                        this.totalAttempts++;
-                        if (storyEl) storyEl.textContent = 'Inactive — skipping to next patient.';
-                        setTimeout(() => this.displayScene('__nextPatient__'), 800);
-                    }
-                });
-            }
+        if (breakItem) {
+            this.showBreakChoice(breakItem);
         }
 
-        if (breakItem) { this.showBreakChoice(breakItem); }
-
-        if (/^(patient|alienPatient)/.test(sceneKey)) { this.addReferenceButton(); }
-
-        // Schedule auto-advance if scene declares one
-        if (scene.autoAdvance) {
-            this.autoAdvanceTimeout = setTimeout(() => {
-                this.displayScene(scene.autoAdvance.next);
-            }, scene.autoAdvance.delay);
-            this.startAutoAdvanceCountdown(Math.round(scene.autoAdvance.delay / 1000));
+        // Add reference-chart toggle button for main-job patient scenes
+        if (/^(patient|alienPatient)/.test(sceneKey)) {
+            this.addReferenceButton();
         }
-    }
-
-    resolveNextPatient() {
-        const SHIFTS_PER_DAY = 3;
-        const PATIENTS_PER_SHIFT = 2;
-
-        if (this.patientsThisShift < PATIENTS_PER_SHIFT) {
-            this.patientsThisShift++;
-            return this.patientQueue.shift();
-        }
-
-        // Shift done
-        this.patientsThisShift = 0;
-        this.shiftIndex++;
-
-        if (this.shiftIndex < SHIFTS_PER_DAY) {
-            return 'startBreak';
-        }
-
-        // Day done
-        this.shiftIndex = 0;
-        this.dayIndex++;
-
-        if (this.dayIndex < 5) {
-            return 'dayTransition';
-        }
-        return 'endScene';
-    }
-
-    updateDayDisplay() {
-        const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
-        const dayEl   = document.getElementById('day-display');
-        const shiftEl = document.getElementById('shift-display');
-        if (dayEl)   dayEl.textContent   = DAY_NAMES[this.dayIndex] || 'Friday';
-        if (shiftEl) shiftEl.textContent = 'Shift ' + (this.shiftIndex + 1) + ' of 3';
-    }
-
-    startAutoAdvanceCountdown(seconds) {
-        clearInterval(this.autoAdvanceCountdownInterval);
-        const el = document.getElementById('break-timer');
-        if (!el) return;
-        let remaining = seconds;
-        el.textContent = 'Continuing in ' + remaining + 's…';
-        this.autoAdvanceCountdownInterval = setInterval(() => {
-            remaining--;
-            if (remaining <= 0) {
-                clearInterval(this.autoAdvanceCountdownInterval);
-                el.textContent = '';
-            } else {
-                el.textContent = 'Continuing in ' + remaining + 's…';
-            }
-        }, 1000);
-    }
-
-    // Override: render slider inline inside #choices instead of the separate #slider-container
-    setupSlider(correctValue, nextSceneKey, questionPrompt) {
-        const container = document.getElementById('choices');
-        container.innerHTML = '';
-
-        const sliderWrap = document.createElement('div');
-        sliderWrap.style.cssText = 'margin:0 0 8px';
-
-        const slider = document.createElement('input');
-        slider.type = 'range';
-        slider.min = 0;
-        slider.max = 100;
-        slider.value = 0;
-        slider.style.cssText = 'width:100%;accent-color:#2b6cb0;margin-bottom:4px';
-
-        const valLabel = document.createElement('p');
-        valLabel.style.cssText = 'font-size:0.9em;color:#4a5568;margin:0 0 10px';
-        valLabel.textContent = 'Value: 0';
-
-        slider.oninput = () => {
-            valLabel.textContent = 'Value: ' + slider.value;
-            this.clearInactivityTimer();
-        };
-
-        sliderWrap.appendChild(slider);
-        sliderWrap.appendChild(valLabel);
-        container.appendChild(sliderWrap);
-
-        const submitBtn = document.createElement('button');
-        submitBtn.textContent = 'Submit Answer';
-        submitBtn.onclick = () => {
-            this.clearInactivityTimer();
-            if (parseInt(slider.value) === correctValue) {
-                const storyEl = document.getElementById('scene-story');
-                if (storyEl) storyEl.textContent = 'Correct! The value is ' + correctValue + '.';
-                this.onSliderSubmit(true);
-                container.innerHTML = '';
-                const nextBtn = document.createElement('button');
-                nextBtn.textContent = 'Continue';
-                nextBtn.onclick = () => this.displayScene(nextSceneKey);
-                container.appendChild(nextBtn);
-            } else {
-                const storyEl = document.getElementById('scene-story');
-                if (storyEl) storyEl.textContent = 'Incorrect. Try again. ' + (questionPrompt || '');
-                this.onSliderSubmit(false);
-            }
-        };
-        container.appendChild(submitBtn);
     }
 
     addReferenceButton() {
@@ -1022,17 +843,18 @@ class MainJobGameInstance extends GameInstance {
     }
 
     showIntroScreen() {
+        // Hide sidebar, hide game-view, show intro overlay
         const sidebar  = document.getElementById('progress-sidebar');
         const gameView = document.getElementById('game-view');
         const overlay  = document.getElementById('intro-overlay');
-        if (sidebar)  sidebar.classList.add('hidden');
+        if (sidebar)  { sidebar.classList.add('hidden'); }
         if (gameView) { gameView.classList.remove('active'); gameView.classList.add('hidden'); }
         if (!overlay) return;
 
         overlay.innerHTML =
-            '<div style="font-size:4.5em;margin-bottom:16px;line-height:1">🏥</div>' +
-            '<h2 style="font-size:2em;font-weight:700;color:#1a365d;margin:0 0 14px">Doctor Game</h2>' +
-            '<p style="font-size:1.05em;color:#4a5568;line-height:1.7;max-width:380px;margin:0 auto 36px">Welcome to the Work Simulator. Are you ready to check in for the day?</p>';
+            '<div class="intro-icon">🏥</div>' +
+            '<h2>Work Simulator</h2>' +
+            '<p class="intro-sub">Welcome to the Work Simulator. Are you ready to check in for the day?</p>';
 
         const btn = document.createElement('button');
         btn.textContent = 'Begin Work Day';
@@ -1040,40 +862,11 @@ class MainJobGameInstance extends GameInstance {
             overlay.classList.remove('active');
             if (sidebar)  sidebar.classList.remove('hidden');
             if (gameView) { gameView.classList.add('active'); gameView.classList.remove('hidden'); }
-            delete this.showGameView;   // restore base-class showGameView
-            this.updateDayDisplay();
             this.displayScene('__nextPatient__');
         };
         overlay.appendChild(btn);
-
-        const refBtn = document.createElement('button');
-        refBtn.textContent = '📋 Reference Chart';
-        refBtn.style.cssText = 'margin-top:14px;background:#e8f4fd;color:#2b6cb0;border:1.5px solid #bee3f8;border-radius:7px;padding:8px 20px;cursor:pointer;font-size:0.95em';
-        let refPanel = null;
-        refBtn.onclick = () => {
-            if (refPanel && refPanel.parentNode) {
-                refPanel.parentNode.removeChild(refPanel);
-                refPanel = null;
-                refBtn.textContent = '📋 Reference Chart';
-            } else {
-                refPanel = document.createElement('div');
-                refPanel.style.cssText = 'margin-top:10px;padding:12px;background:#f0f4f8;border-radius:6px;font-size:0.88em;text-align:left;max-width:420px;margin-left:auto;margin-right:auto';
-                refPanel.innerHTML = '<strong style="color:#1a365d">Hospital Reference — Known Diseases</strong>' +
-                    '<table style="margin-top:8px;border-collapse:collapse;width:100%">' +
-                    '<tr><th style="text-align:left;padding:4px 10px;color:#2b6cb0">Disease</th><th style="text-align:left;padding:4px 10px;color:#2b6cb0">Symptoms</th></tr>' +
-                    '<tr><td style="padding:4px 10px">Pneumonia</td><td style="padding:4px 10px">Coughing, Fever, Chills, Shortness of breath</td></tr>' +
-                    '<tr><td style="padding:4px 10px">Stroke</td><td style="padding:4px 10px">Weakness in one arm, Slurred speech</td></tr>' +
-                    '<tr><td style="padding:4px 10px">Heart Attack</td><td style="padding:4px 10px">Chest pain, Shortness of breath</td></tr>' +
-                    '<tr><td style="padding:4px 10px">Anxiety Attack</td><td style="padding:4px 10px">Rapid heart rate, Sweating, Trembling</td></tr>' +
-                    '</table>';
-                overlay.appendChild(refPanel);
-                refBtn.textContent = '📋 Hide Reference';
-            }
-        };
-        overlay.appendChild(refBtn);
-
         overlay.classList.add('active');
-        this.showGameView = () => {};   // suppress base-class during intro
+        this.showGameView = () => {};  // suppress base-class showGameView during intro
     }
 
     // Shows a 10-second choice window: side jobs keep continuousWork running; "Take a Break" resets it and starts 1-min break
@@ -1161,8 +954,7 @@ class MainJobGameInstance extends GameInstance {
     // sceneLookupKey is used to look up startSceneMap (defaults to returnScene if not provided).
     runSideJobAction(job, returnScene, sceneLookupKey) {
         this.stopBreakTimer();
-        // Always show "Starting Next Shift" transition after side job completes
-        this.pendingReturnScene = 'shiftTransition';
+        this.pendingReturnScene = returnScene;
         this.onSideJob = true;
         this.activeSideJob = job;
         this.currentSideJobSession = {
@@ -1173,23 +965,15 @@ class MainJobGameInstance extends GameInstance {
         };
         this.updateCurrentJobDisplay();
         const lookupKey = sceneLookupKey || returnScene;
-        let startScene;
-        if (job.startScenes && job.startScenes.length > 0) {
-            startScene = job.startScenes[Math.floor(Math.random() * job.startScenes.length)];
-        } else {
-            startScene = job.startScene ||
-                (job.startSceneMap && job.startSceneMap[lookupKey]);
-        }
+        const startScene = job.startScene ||
+            (job.startSceneMap && job.startSceneMap[lookupKey]);
         this.displayScene(startScene);
     }
 
-    // Also stop the continuousWorkTimer and any pending auto-advance when the main timer stops
+    // Also stop the continuousWorkTimer when the main timer stops
     stopTimer() {
         super.stopTimer();
         clearInterval(this.continuousWorkInterval);
-        clearTimeout(this.autoAdvanceTimeout);
-        clearInterval(this.autoAdvanceCountdownInterval);
-        clearTimeout(this.inactivityTimeout);
     }
 
     storeGameData() {
@@ -1226,22 +1010,16 @@ class MainJobGameInstance extends GameInstance {
         this.patientResults = [];
         this.sideJobSessions = [];
         this.currentSideJobSession = null;
-        this.dayIndex = 0;
-        this.shiftIndex = 0;
-        this.patientsThisShift = 0;
 
-        // Build and shuffle patient queue (30 patients: 20 known + 10 alien)
-        const pool = ['patient1','patient2','patient3','patient4','patient5',
-                      'patient6','patient7','patient8','patient9','patient10',
-                      'patient11','patient12','patient13','patient14','patient15',
-                      'patient16','patient17','patient18','patient19','patient20',
-                      'alienPatient1','alienPatient2','alienPatient3','alienPatient4','alienPatient5',
-                      'alienPatient6','alienPatient7','alienPatient8','alienPatient9','alienPatient10'];
+        // Build and shuffle patient queue (7 patients: 5 known + 2 alien ≈ 1/3 alien)
+        const pool = ['patient1', 'patient2', 'patient3', 'patient4', 'patient5',
+                      'alienPatient1', 'alienPatient2'];
         for (let i = pool.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
         }
         this.patientQueue = pool;
+        this.patientsDone = 0;
 
         // Restore showGameView (may have been suppressed by showIntroScreen)
         delete this.showGameView;
@@ -1367,9 +1145,13 @@ const TELEMEDICINE_SCENES = {
         },
         patient3: {
             title: "Patient ID: 3",
-            story: "Robert is a 52-year-old male with a heart condition. Calculate the correct medication dose based on his weight of 80kg. Each kg requires 0.5 units.",
-            actionItems: [
-                { type: 'slider', correctValue: 40, nextScene: '__nextPatient__', hint: 'Multiply the weight (80kg) by the dosage per kg (0.5 units).' }
+            story: "Robert is a 52-year-old male who presents with sudden crushing chest pain radiating to his left arm, and shortness of breath. What is your diagnosis?",
+            choices: [
+                { text: "Heart Attack",   next: '__nextPatient__', correct: true  },
+                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
+                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
+                { text: "Stroke",         next: '__nextPatient__', correct: false },
+                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
             ]
         },
         startBreak: {
@@ -1511,175 +1293,9 @@ const TELEMEDICINE_SCENES = {
             ]
         },
         endScene: {
-            title: "Week Complete!",
-            story: "Your week is over. Review your patient diagnoses below.",
+            title: "Day 1 Finished!",
+            story: "Your shift is over. Review your patient diagnoses below.",
             actionItems: [{ type: 'endGame' }]
-        },
-
-        patient6: {
-            title: "Patient ID: 6",
-            story: "Maria, 28, presents with fever, cough, sore throat, and a congested nose. What is your diagnosis?",
-            choices: [
-                { text: "Flu",            next: '__nextPatient__', correct: true  },
-                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
-                { text: "Migraine",       next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient7: {
-            title: "Patient ID: 7",
-            story: "Carlos, 65, has a persistent cough, fever, chills, and difficulty breathing deeply. What is your diagnosis?",
-            choices: [
-                { text: "Pneumonia",      next: '__nextPatient__', correct: true  },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Flu",            next: '__nextPatient__', correct: false },
-                { text: "Stroke",         next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient8: {
-            title: "Patient ID: 8",
-            story: "Sarah, 40, reports a sudden racing heart, profuse sweating, and uncontrollable trembling. She says it came on out of nowhere. What is your diagnosis?",
-            choices: [
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: true  },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Stroke",         next: '__nextPatient__', correct: false },
-                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient9: {
-            title: "Patient ID: 9",
-            story: "David, 72, woke up unable to lift his right arm and is slurring his words noticeably. What is your diagnosis?",
-            choices: [
-                { text: "Stroke",         next: '__nextPatient__', correct: true  },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient10: {
-            title: "Patient ID: 10",
-            story: "Lisa, 35, has had a throbbing headache for two hours and cannot tolerate bright light. What is your diagnosis?",
-            choices: [
-                { text: "Migraine",       next: '__nextPatient__', correct: true  },
-                { text: "Stroke",         next: '__nextPatient__', correct: false },
-                { text: "Flu",            next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient11: {
-            title: "Patient ID: 11",
-            story: "Tom, 52, clutches his chest and says the pain radiates into his jaw. He is short of breath and nauseous. What is your diagnosis?",
-            choices: [
-                { text: "Heart Attack",   next: '__nextPatient__', correct: true  },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
-                { text: "Migraine",       next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient12: {
-            title: "Patient ID: 12",
-            story: "Emma, 33, is shaking, sweating, and feels her heart pounding. She just received unexpected news. What is your diagnosis?",
-            choices: [
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: true  },
-                { text: "Stroke",         next: '__nextPatient__', correct: false },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Flu",            next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient13: {
-            title: "Patient ID: 13",
-            story: "James, 47, has a fever of 102°F, a rattling cough, and says his chest feels tight when he inhales. What is your diagnosis?",
-            choices: [
-                { text: "Pneumonia",      next: '__nextPatient__', correct: true  },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Flu",            next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient14: {
-            title: "Patient ID: 14",
-            story: "Sophie, 26, has a severe one-sided headache lasting three hours, worsened by any light. What is your diagnosis?",
-            choices: [
-                { text: "Migraine",       next: '__nextPatient__', correct: true  },
-                { text: "Flu",            next: '__nextPatient__', correct: false },
-                { text: "Stroke",         next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient15: {
-            title: "Patient ID: 15",
-            story: "Michael, 60, suddenly cannot lift his left arm and is having trouble finding words mid-sentence. What is your diagnosis?",
-            choices: [
-                { text: "Stroke",         next: '__nextPatient__', correct: true  },
-                { text: "Migraine",       next: '__nextPatient__', correct: false },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient16: {
-            title: "Patient ID: 16",
-            story: "Hannah, 43, has had a sore throat, runny nose, mild fever, and a dry cough for two days. What is your diagnosis?",
-            choices: [
-                { text: "Flu",            next: '__nextPatient__', correct: true  },
-                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Migraine",       next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient17: {
-            title: "Patient ID: 17",
-            story: "Chris, 57, reports squeezing chest pain with shortness of breath and lightheadedness. What is your diagnosis?",
-            choices: [
-                { text: "Heart Attack",   next: '__nextPatient__', correct: true  },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Stroke",         next: '__nextPatient__', correct: false },
-                { text: "Flu",            next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient18: {
-            title: "Patient ID: 18",
-            story: "Priya, 34, is trembling and hyperventilating. She says her heart is racing and she feels a sense of dread. What is your diagnosis?",
-            choices: [
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: true  },
-                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Stroke",         next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient19: {
-            title: "Patient ID: 19",
-            story: "Kevin, 68, presents with facial drooping on his right side and cannot raise both arms evenly. What is your diagnosis?",
-            choices: [
-                { text: "Stroke",         next: '__nextPatient__', correct: true  },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        patient20: {
-            title: "Patient ID: 20",
-            story: "Amy, 41, has fever, chills, and a wet productive cough that has worsened over four days. What is your diagnosis?",
-            choices: [
-                { text: "Pneumonia",      next: '__nextPatient__', correct: true  },
-                { text: "Stroke",         next: '__nextPatient__', correct: false },
-                { text: "Flu",            next: '__nextPatient__', correct: false },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
         },
 
         // ── Alien disease scenes ──────────────────────────────────────────────
@@ -1706,156 +1322,33 @@ const TELEMEDICINE_SCENES = {
             ]
         },
 
-        alienPatient3: {
-            title: "Unknown Patient",
-            story: "Patient RX-5 has faintly glowing patches along their neck and arms that pulse with a soft hum. Your reference materials have no record of this. What is your diagnosis?",
-            choices: [
-                { text: "Vorpal Syndrome",     next: '__nextPatient__', correct: true  },
-                { text: "Null-Field Exposure",  next: '__nextPatient__', correct: false },
-                { text: "Flu",                  next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack",        next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        alienPatient4: {
-            title: "Unknown Patient",
-            story: "Patient QK-7 floated twelve inches off the exam table and claims everything they see has a sound. Your reference materials have no record of this. What is your diagnosis?",
-            choices: [
-                { text: "Null-Field Exposure",  next: '__nextPatient__', correct: true  },
-                { text: "Vorpal Syndrome",       next: '__nextPatient__', correct: false },
-                { text: "Stroke",                next: '__nextPatient__', correct: false },
-                { text: "Pneumonia",             next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        alienPatient5: {
-            title: "Unknown Patient",
-            story: "Patient ZT-2 emits a steady low harmonic tone and has bioluminescent streaks across their torso. Your reference materials have no record of this. What is your diagnosis?",
-            choices: [
-                { text: "Vorpal Syndrome",     next: '__nextPatient__', correct: true  },
-                { text: "Null-Field Exposure",  next: '__nextPatient__', correct: false },
-                { text: "Heart Attack",          next: '__nextPatient__', correct: false },
-                { text: "Migraine",              next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        alienPatient6: {
-            title: "Unknown Patient",
-            story: "Patient BM-4 drifts upward when standing and describes tasting music. Your reference materials have no record of this. What is your diagnosis?",
-            choices: [
-                { text: "Null-Field Exposure",  next: '__nextPatient__', correct: true  },
-                { text: "Vorpal Syndrome",       next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack",         next: '__nextPatient__', correct: false },
-                { text: "Stroke",                 next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        alienPatient7: {
-            title: "Unknown Patient",
-            story: "Patient YP-9 appears to glow softly in dim light and makes a vibrating hum with each exhale. Your reference materials have no record of this. What is your diagnosis?",
-            choices: [
-                { text: "Vorpal Syndrome",     next: '__nextPatient__', correct: true  },
-                { text: "Null-Field Exposure",  next: '__nextPatient__', correct: false },
-                { text: "Pneumonia",             next: '__nextPatient__', correct: false },
-                { text: "Heart Attack",          next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        alienPatient8: {
-            title: "Unknown Patient",
-            story: "Patient LX-3 rose to the ceiling spontaneously and can identify colors by their smell. Your reference materials have no record of this. What is your diagnosis?",
-            choices: [
-                { text: "Null-Field Exposure",  next: '__nextPatient__', correct: true  },
-                { text: "Vorpal Syndrome",       next: '__nextPatient__', correct: false },
-                { text: "Flu",                   next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack",         next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        alienPatient9: {
-            title: "Unknown Patient",
-            story: "Patient WZ-6 has luminous blue patterns spreading across their skin and a constant resonant hum. Your reference materials have no record of this. What is your diagnosis?",
-            choices: [
-                { text: "Vorpal Syndrome",     next: '__nextPatient__', correct: true  },
-                { text: "Null-Field Exposure",  next: '__nextPatient__', correct: false },
-                { text: "Stroke",               next: '__nextPatient__', correct: false },
-                { text: "Migraine",             next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-        alienPatient10: {
-            title: "Unknown Patient",
-            story: "Patient FC-8 keeps briefly levitating and insists they can hear the color red. Your reference materials have no record of this. What is your diagnosis?",
-            choices: [
-                { text: "Null-Field Exposure",  next: '__nextPatient__', correct: true  },
-                { text: "Vorpal Syndrome",       next: '__nextPatient__', correct: false },
-                { text: "Pneumonia",             next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack",         next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
-            ]
-        },
-
-        // ── Medical School scenes ─────────────────────────────────────────────
+        // ── Medical School placeholder scene ─────────────────────────────────
         medSchoolStart: {
-            title: "Medical School — Full Reference",
-            story: "Study the complete disease reference table. You will return to your shift automatically in 30 seconds.",
+            title: "Medical School",
+            story: "Review the disease reference table below.",
             chart: `<table>
                 <tr><th>Disease</th><th>Symptoms</th></tr>
                 <tr><td>Pneumonia</td><td>Coughing, Fever, Chills, Shortness of breath</td></tr>
                 <tr><td>Stroke</td><td>Weakness in one arm, Slurred speech</td></tr>
                 <tr><td>Heart Attack</td><td>Chest pain, Shortness of breath</td></tr>
                 <tr><td>Anxiety Attack</td><td>Rapid heart rate, Sweating, Trembling</td></tr>
-                <tr><td>Migraine</td><td>Throbbing one-sided headache, Light sensitivity</td></tr>
-                <tr><td>Flu</td><td>Fever, Sore throat, Runny nose, Dry cough</td></tr>
                 <tr><td colspan="2" style="padding-top:8px;font-style:italic;color:#888">Alien Diseases</td></tr>
                 <tr><td>Vorpal Syndrome</td><td>Glowing blue skin patches, Low-frequency humming</td></tr>
                 <tr><td>Null-Field Exposure</td><td>Spontaneous levitation, Hearing colors (cross-sensory)</td></tr>
             </table>`,
-            choices: [{ text: "Return to shift early", next: '__return__' }],
-            autoAdvance: { delay: 30000, next: '__return__' }
-        },
-        medSchool_alien: {
-            title: "Medical School — Alien Diseases",
-            story: "Review the alien disease reference table below.",
-            chart: `<table>
-                <tr><th>Disease</th><th>Symptoms</th></tr>
-                <tr><td>Vorpal Syndrome</td><td>Glowing blue skin patches, Low-frequency humming</td></tr>
-                <tr><td>Null-Field Exposure</td><td>Spontaneous levitation, Hearing colors (cross-sensory)</td></tr>
-            </table>`,
             choices: [{ text: "Return to break", next: '__return__' }]
-        },
-        medSchool_dose1: {
-            title: "Medical School: Dosage Calculation",
-            story: "A patient weighs 60 kg. The prescribed medication requires 0.5 mg per kg. What is the correct total dose in mg? (Hint: 60 × 0.5)",
-            actionItems: [{ type: 'slider', correctValue: 30, nextScene: '__return__', hint: 'Multiply the weight (60 kg) by the dose per kg (0.5 mg).' }]
-        },
-        medSchool_dose2: {
-            title: "Medical School: Dosage Calculation",
-            story: "A patient weighs 70 kg. The prescribed medication requires 0.5 mg per kg. What is the correct total dose in mg? (Hint: 70 × 0.5)",
-            actionItems: [{ type: 'slider', correctValue: 35, nextScene: '__return__', hint: 'Multiply the weight (70 kg) by the dose per kg (0.5 mg).' }]
         },
 
         // ── Ride Sharing scenes ───────────────────────────────────────────────
         uberStart: {
             title: "Ride Sharing: New Shift",
             story: "Drive your car (🚗) to pick up customers (🧍). A new customer appears every 5 seconds. You have 60 seconds — pick up as many as you can!",
-            choices: [{ text: "Start driving", next: 'uberDrive' }],
-            autoAdvance: { delay: 5000, next: 'uberDrive' }
+            choices: [{ text: "Start driving", next: 'uberDrive' }]
         },
         uberDrive: {
             title: "Ride Sharing: On the Road",
             story: "Use arrow keys to move.",
             actionItems: [{ type: 'uberGame', nextScene: '__return__' }]
-        },
-        shiftTransition: {
-            title: "Starting Next Shift",
-            story: "Get ready — your next patients are waiting.",
-            autoAdvance: { delay: 5000, next: '__nextPatient__' }
-        },
-        dayTransition: {
-            title: "Day Complete!",
-            story: "Rest up. Tomorrow starts soon.",
-            autoAdvance: { delay: 5000, next: '__nextPatient__' }
         }
     }
 };
