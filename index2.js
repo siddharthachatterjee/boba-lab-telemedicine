@@ -1,4 +1,75 @@
 // =============================================================================
+// Phase configuration — single source of truth for all structural parameters
+// =============================================================================
+
+const PHASE_CONFIG = {
+    INACTIVITY_TIMEOUT_SECONDS: 999999,   // effectively disables inactivity auto-skip
+    TELELOGIN_ENABLED: false,              // bypass password login for telemedicine
+
+    phaseOrder: [0, 1, 3],
+
+    phases: {
+        0: {
+            id: 0,
+            name: 'Tutorial',
+            shiftsPerDay: 1,
+            patientsPerShift: 0,           // tutorial uses scripted scenes, not queue
+            daysCount: 1,
+            sideJobMenu: [],
+            patientPool: 'TUTORIAL_PATIENTS',
+            startScene: 'tutorialIntro'
+        },
+        1: {
+            id: 1,
+            name: 'Phase 1',
+            shiftsPerDay: 3,
+            patientsPerShift: 2,
+            daysCount: 5,
+            sideJobMenu: ['telemedicine', 'medschool', 'uber'],
+            patientPool: 'PHASE1_PATIENTS',
+            startScene: 'phase1Intro'
+        },
+        3: {
+            id: 3,
+            name: 'Phase 3',
+            shiftsPerDay: 3,
+            patientsPerShift: 2,
+            daysCount: 5,
+            sideJobMenu: ['telemedicine', 'medschool', 'uber'],
+            patientPool: 'PHASE3_PATIENTS',
+            startScene: 'phase3Intro'
+        }
+    }
+};
+
+const TUTORIAL_PATIENTS = [];   // tutorial flow is scripted; queue unused
+
+const PHASE1_PATIENTS = [
+    'patient1','patient2','patient3','patient4','patient5',
+    'patient6','patient7','patient8','patient9','patient10',
+    'patient11','patient12','patient13','patient14','patient15',
+    'patient16','patient17','patient18','patient19','patient20',
+    'alienPatient1','alienPatient2','alienPatient3','alienPatient4','alienPatient5',
+    'alienPatient6','alienPatient7','alienPatient8','alienPatient9','alienPatient10'
+];
+
+const PHASE3_PATIENTS = [
+    'patient21','patient22','patient23','patient24','patient25',
+    'patient26','patient27','patient28','patient29','patient30',
+    'alienPatient1','alienPatient2','alienPatient3','alienPatient4','alienPatient5',
+    'alienPatient6','alienPatient7','alienPatient8','alienPatient9','alienPatient10',
+    'patient1','patient2','patient4','patient6','patient8',
+    'patient10','patient12','patient14','patient16','patient18'
+];
+
+const PATIENT_POOLS = {
+    TUTORIAL_PATIENTS: TUTORIAL_PATIENTS,
+    PHASE1_PATIENTS:   PHASE1_PATIENTS,
+    PHASE3_PATIENTS:   PHASE3_PATIENTS
+};
+
+
+// =============================================================================
 // Base classes — identical to index.js
 // =============================================================================
 
@@ -240,6 +311,96 @@ class PerformanceTracker {
     }
 }
 
+// =============================================================================
+// DataCollector — records granular trial-by-trial data for Qualtrics export
+// =============================================================================
+
+class DataCollector {
+    constructor() {
+        this.phaseId = null;
+        this.phaseStartTime = null;
+        this.trialSceneStartTime = null;
+
+        // Parallel arrays — one entry per recorded trial
+        this.trialPhase      = [];
+        this.trialScene      = [];
+        this.trialType       = [];   // 'choice' | 'slider' | 'break_decision'
+        this.trialAnswer     = [];
+        this.trialCorrect    = [];
+        this.trialTimeMs     = [];
+        this.trialTimestamp  = [];
+        this.trialReward     = [];
+        this.trialSliderVal  = [];
+    }
+
+    setPhase(phaseId) {
+        this.phaseId = phaseId;
+        this.phaseStartTime = Date.now();
+    }
+
+    startTrial(_sceneKey) {
+        this.trialSceneStartTime = Date.now();
+    }
+
+    recordChoice(sceneKey, answerText, correct, rewardDelta) {
+        const timeMs = this.trialSceneStartTime ? Date.now() - this.trialSceneStartTime : null;
+        this.trialPhase.push(this.phaseId);
+        this.trialScene.push(sceneKey);
+        this.trialType.push('choice');
+        this.trialAnswer.push(answerText);
+        this.trialCorrect.push(correct !== undefined ? correct : null);
+        this.trialTimeMs.push(timeMs);
+        this.trialTimestamp.push(Date.now());
+        this.trialReward.push(rewardDelta !== undefined ? rewardDelta : null);
+        this.trialSliderVal.push(null);
+    }
+
+    recordSlider(sceneKey, sliderValue, correct, rewardDelta) {
+        const timeMs = this.trialSceneStartTime ? Date.now() - this.trialSceneStartTime : null;
+        this.trialPhase.push(this.phaseId);
+        this.trialScene.push(sceneKey);
+        this.trialType.push('slider');
+        this.trialAnswer.push(sliderValue + ' mg');
+        this.trialCorrect.push(correct);
+        this.trialTimeMs.push(timeMs);
+        this.trialTimestamp.push(Date.now());
+        this.trialReward.push(rewardDelta !== undefined ? rewardDelta : null);
+        this.trialSliderVal.push(sliderValue);
+    }
+
+    recordBreakDecision(decision) {
+        const timeMs = this.trialSceneStartTime ? Date.now() - this.trialSceneStartTime : null;
+        this.trialPhase.push(this.phaseId);
+        this.trialScene.push('breakChoice');
+        this.trialType.push('break_decision');
+        this.trialAnswer.push(decision);
+        this.trialCorrect.push(null);
+        this.trialTimeMs.push(timeMs);
+        this.trialTimestamp.push(Date.now());
+        this.trialReward.push(null);
+        this.trialSliderVal.push(null);
+    }
+
+    saveToQualtrics() {
+        try {
+            const QSE = Qualtrics.SurveyEngine;
+            QSE.setEmbeddedData('dc_phase',        JSON.stringify(this.trialPhase));
+            QSE.setEmbeddedData('dc_scene',        JSON.stringify(this.trialScene));
+            QSE.setEmbeddedData('dc_type',         JSON.stringify(this.trialType));
+            QSE.setEmbeddedData('dc_answer',       JSON.stringify(this.trialAnswer));
+            QSE.setEmbeddedData('dc_correct',      JSON.stringify(this.trialCorrect));
+            QSE.setEmbeddedData('dc_time_ms',      JSON.stringify(this.trialTimeMs));
+            QSE.setEmbeddedData('dc_timestamp',    JSON.stringify(this.trialTimestamp));
+            QSE.setEmbeddedData('dc_reward',       JSON.stringify(this.trialReward));
+            QSE.setEmbeddedData('dc_slider_val',   JSON.stringify(this.trialSliderVal));
+            QSE.setEmbeddedData('dc_total_trials', this.trialPhase.length);
+        } catch(e) {
+            console.warn('DataCollector.saveToQualtrics: Qualtrics not available', e);
+        }
+    }
+}
+
+
 class TaskManager {
     constructor(tracker) {
         this.tasks = {};
@@ -287,6 +448,7 @@ class TaskManager {
 
 class SideJob {
     constructor(config) {
+        this.id = config.id || config.name;
         this.name = config.name;
         this.actionItem = config.actionItem;   // action item type shared with the main job
         this.reward = config.reward;
@@ -301,6 +463,11 @@ class MainJobGameInstance extends GameInstance {
     constructor(config) {
         super(config);
         this.sideJobs = config.sideJobs || [];
+        this.phaseId = config.phaseId !== undefined ? config.phaseId : null;
+        this.phaseCfg = config.phaseCfg || null;
+        this.patientPool = config.patientPool || null;
+        this.onPhaseEnd = config.onPhaseEnd || null;
+        this.dataCollector = config.dataCollector || null;
         this.sideJobRewardsTotal = 0;
         this.continuousWorkTime = 0;
         this.continuousWorkInterval = null;
@@ -325,7 +492,9 @@ class MainJobGameInstance extends GameInstance {
         this.autoAdvanceTimeout = null;
         this.autoAdvanceCountdownInterval = null;
         this.inactivityTimeout = null;
+        this._inactivityCountdownInterval = null;
         this.timerStartMs = null;
+        this.sideJobStartTime = null;
     }
 
     get totalReward() {
@@ -365,14 +534,38 @@ class MainJobGameInstance extends GameInstance {
         this.timerStartMs = Date.now();
     }
 
-    setInactivityTimer(callback) {
+    setInactivityTimer(callback, seconds = 5) {
         clearTimeout(this.inactivityTimeout);
-        this.inactivityTimeout = setTimeout(callback, 5000);
+        clearInterval(this._inactivityCountdownInterval);
+        const el = document.getElementById('break-timer');
+        // PHASE_CONFIG.INACTIVITY_TIMEOUT_SECONDS overrides the per-scene timeout
+        const effectiveSeconds = (PHASE_CONFIG.INACTIVITY_TIMEOUT_SECONDS < 9999)
+            ? PHASE_CONFIG.INACTIVITY_TIMEOUT_SECONDS : seconds;
+        let remaining = effectiveSeconds;
+        if (el) el.textContent = 'Time remaining: ' + remaining + 's';
+        this._inactivityCountdownInterval = setInterval(() => {
+            remaining--;
+            if (remaining <= 0) {
+                clearInterval(this._inactivityCountdownInterval);
+                if (el) el.textContent = '';
+            } else {
+                if (el) el.textContent = 'Time remaining: ' + remaining + 's';
+            }
+        }, 1000);
+        this.inactivityTimeout = setTimeout(() => {
+            clearInterval(this._inactivityCountdownInterval);
+            if (el) el.textContent = '';
+            callback();
+        }, effectiveSeconds * 1000);
     }
 
     clearInactivityTimer() {
         clearTimeout(this.inactivityTimeout);
+        clearInterval(this._inactivityCountdownInterval);
         this.inactivityTimeout = null;
+        this._inactivityCountdownInterval = null;
+        const el = document.getElementById('break-timer');
+        if (el && el.textContent.startsWith('Time remaining:')) el.textContent = '';
     }
 
     updateContinuousWorkDisplay() {
@@ -440,6 +633,11 @@ class MainJobGameInstance extends GameInstance {
     }
 
     handleTeleLogin(item) {
+        if (!PHASE_CONFIG.TELELOGIN_ENABLED) {
+            this.displayScene(item.nextScene);
+            return;
+        }
+
         const container = document.getElementById('choices');
         container.innerHTML = '';
 
@@ -495,6 +693,8 @@ class MainJobGameInstance extends GameInstance {
             patient6:'Maria', patient7:'Carlos', patient8:'Sarah', patient9:'David', patient10:'Lisa',
             patient11:'Tom', patient12:'Emma', patient13:'James', patient14:'Sophie', patient15:'Michael',
             patient16:'Hannah', patient17:'Chris', patient18:'Priya', patient19:'Kevin', patient20:'Amy',
+            patient21:'Elena', patient22:'Marcus', patient23:'Yuki', patient24:'Luca', patient25:'Fatima',
+            patient26:'Ravi', patient27:'Nadia', patient28:'Owen', patient29:'Sera', patient30:'Jin',
             alienPatient1:'Patient ZX-9', alienPatient2:'Patient QT-3',
             alienPatient3:'Patient RX-5', alienPatient4:'Patient QK-7',
             alienPatient5:'Patient ZT-2', alienPatient6:'Patient BM-4',
@@ -502,13 +702,20 @@ class MainJobGameInstance extends GameInstance {
             alienPatient9:'Patient WZ-6', alienPatient10:'Patient FC-8'
         };
         const CORRECT_DX = {
+            // Diagnosis patients
             patient1:'Pneumonia', patient2:'Stroke', patient4:'Heart Attack',
-            patient5:'Heart Attack', patient6:'Flu', patient7:'Pneumonia',
-            patient8:'Anxiety Attack', patient9:'Stroke', patient10:'Migraine',
-            patient11:'Heart Attack', patient12:'Anxiety Attack', patient13:'Pneumonia',
-            patient14:'Migraine', patient15:'Stroke', patient16:'Flu',
-            patient17:'Heart Attack', patient18:'Anxiety Attack', patient19:'Stroke',
-            patient20:'Pneumonia',
+            patient6:'Flu', patient8:'Anxiety Attack', patient10:'Migraine',
+            patient12:'Anxiety Attack', patient14:'Migraine', patient16:'Flu',
+            patient18:'Anxiety Attack',
+            // Dosage patients (correct dose in mg)
+            patient3:'40 mg', patient5:'35 mg', patient7:'45 mg',
+            patient9:'50 mg', patient11:'55 mg', patient13:'60 mg',
+            patient15:'70 mg', patient17:'75 mg', patient19:'80 mg', patient20:'90 mg',
+            // Phase 3 patients
+            patient21:'Pneumonia', patient23:'Stroke', patient25:'Heart Attack',
+            patient27:'Anxiety Attack', patient29:'Migraine',
+            patient22:'40 mg', patient24:'60 mg', patient26:'65 mg',
+            patient28:'85 mg', patient30:'105 mg',
             alienPatient1:'Vorpal Syndrome', alienPatient2:'Null-Field Exposure',
             alienPatient3:'Vorpal Syndrome', alienPatient4:'Null-Field Exposure',
             alienPatient5:'Vorpal Syndrome', alienPatient6:'Null-Field Exposure',
@@ -523,8 +730,8 @@ class MainJobGameInstance extends GameInstance {
         // ── Hospital patients ──
         let html = '<h3 style="margin-bottom:10px;color:#1a365d;font-size:1.1em">Hospital Patients</h3>';
         html += '<table ' + tableStyle + '>';
-        html += '<tr><th ' + th + '>Patient</th><th ' + th + '>Your Diagnosis</th>' +
-                '<th ' + th + '>Correct Diagnosis</th><th ' + th + '>Result</th></tr>';
+        html += '<tr><th ' + th + '>Patient</th><th ' + th + '>Your Answer</th>' +
+                '<th ' + th + '>Correct Answer</th><th ' + th + '>Result</th></tr>';
 
         this.patientResults.forEach(r => {
             const label   = LABELS[r.scene] || r.scene;
@@ -752,11 +959,14 @@ class MainJobGameInstance extends GameInstance {
         // Main-job patient choices carry explicit correct/skip flags — no immediate feedback
         if (choice && (choice.hasOwnProperty('correct') || choice.skip)) {
             this.totalAttempts++;
+            let rewardDelta = 0;
             if (choice.correct === true) {
                 this.totalCorrect++;
                 this.mainJobRewardsTotal += this.mainJobRewardRate;
+                rewardDelta = this.mainJobRewardRate;
             } else if (choice.correct === false) {
                 this.mainJobRewardsTotal -= this.mainJobPenalty;
+                rewardDelta = -this.mainJobPenalty;
             }
             // skip: +0, no change
             this.patientResults.push({
@@ -765,35 +975,62 @@ class MainJobGameInstance extends GameInstance {
                 correct: choice.correct,
                 skipped: !!choice.skip
             });
+            if (this.dataCollector) {
+                this.dataCollector.recordChoice(fromKey, choice.text || '', choice.correct, rewardDelta);
+            }
             this.updateTotalRewardDisplay();
             return;
         }
         // Telemedicine: uses Correct/Wrong in destination key
         if (toKey.includes('Correct') || toKey.includes('Wrong')) {
             this.totalAttempts++;
-            if (toKey.includes('Correct')) {
+            const isCorrect = toKey.includes('Correct');
+            let rewardDelta = 0;
+            if (isCorrect) {
                 this.totalCorrect++;
                 if (this.onSideJob) {
                     this.sideJobRewardsTotal += this.telemedicineReward;
+                    rewardDelta = this.telemedicineReward;
                 } else {
                     this.mainJobRewardsTotal += this.mainJobRewardRate;
+                    rewardDelta = this.mainJobRewardRate;
                 }
                 this.updateTotalRewardDisplay();
+            }
+            if (this.dataCollector) {
+                this.dataCollector.recordChoice(fromKey, choice ? (choice.text || '') : '', isCorrect, rewardDelta);
             }
             this.updateAccuracyDisplay();
         }
     }
 
-    onSliderSubmit(correct) {
+    onSliderSubmit(correct, sliderValue) {
         this.totalAttempts++;
+        let rewardDelta = 0;
         if (correct) {
             this.totalCorrect++;
             if (this.onSideJob && this.activeSideJob) {
                 this.sideJobRewardsTotal += this.activeSideJob.reward || 0;
+                rewardDelta = this.activeSideJob.reward || 0;
             } else {
                 this.mainJobRewardsTotal += this.mainJobRewardRate;
+                rewardDelta = this.mainJobRewardRate;
             }
             this.updateTotalRewardDisplay();
+            // Track correct dosage result for hospital patients (once per patient)
+            if (!this.onSideJob && /^(patient|alienPatient)/.test(this.currentScene)) {
+                if (!this.patientResults.some(r => r.scene === this.currentScene)) {
+                    this.patientResults.push({
+                        scene: this.currentScene,
+                        answer: 'Correct dose',
+                        correct: true,
+                        skipped: false
+                    });
+                }
+            }
+        }
+        if (this.dataCollector && sliderValue !== undefined) {
+            this.dataCollector.recordSlider(this.currentScene, sliderValue, correct, rewardDelta);
         }
         this.updateAccuracyDisplay();
     }
@@ -804,8 +1041,45 @@ class MainJobGameInstance extends GameInstance {
         clearTimeout(this.autoAdvanceTimeout);
         clearInterval(this.autoAdvanceCountdownInterval);
         clearTimeout(this.inactivityTimeout);
+        clearInterval(this._inactivityCountdownInterval);
+        this.inactivityTimeout = null;
+        this._inactivityCountdownInterval = null;
         const breakTimerEl = document.getElementById('break-timer');
         if (breakTimerEl) breakTimerEl.textContent = '';
+
+        // Phase end sentinel — show summary and hand off to orchestrator
+        if (sceneKey === '__phaseEnd__') {
+            this.stopTimer();
+            clearInterval(this.continuousWorkInterval);
+            const titleEl = document.getElementById('scene-title');
+            const storyEl = document.getElementById('scene-story');
+            const chartEl = document.getElementById('disease-chart');
+            const choicesEl = document.getElementById('choices');
+            const phaseName = this.phaseCfg ? this.phaseCfg.name : 'Phase';
+            if (titleEl) titleEl.textContent = phaseName + ' Complete!';
+            if (storyEl) storyEl.textContent = this.phaseCfg && this.phaseCfg.id === 0
+                ? 'Tutorial complete — you are ready to begin!'
+                : 'Review your results below.';
+            if (chartEl) chartEl.innerHTML = '';
+            if (choicesEl) choicesEl.innerHTML = '';
+            if (this.phaseCfg && this.phaseCfg.id !== 0) this.renderPatientSummary();
+            const continueBtn = document.createElement('button');
+            continueBtn.textContent = this.onPhaseEnd ? 'Continue to Next Phase' : 'Finish';
+            continueBtn.onclick = () => {
+                if (this.dataCollector) this.dataCollector.saveToQualtrics();
+                if (this.onPhaseEnd) {
+                    this.onPhaseEnd(this.getStats());
+                } else {
+                    if (this.Q) this.Q.enableNextButton();
+                }
+            };
+            if (choicesEl) choicesEl.appendChild(continueBtn);
+            this.showGameView();
+            return;
+        }
+
+        // Record trial start time for DataCollector
+        if (this.dataCollector) this.dataCollector.startTrial(sceneKey);
 
         // Intercept intro: show styled hero screen
         if (sceneKey === 'intro') { this.showIntroScreen(); return; }
@@ -854,25 +1128,56 @@ class MainJobGameInstance extends GameInstance {
         super.displayScene(sceneKey);
         this.updateTotalRewardDisplay();
 
-        // 5-second inactivity timer for interactive pages that don't have their own autoAdvance
+        // Inactivity timer for interactive pages that don't have their own autoAdvance
+        // teleLogin gets 15s; slider gets 30s; all other interactive scenes get 5s
         if (!scene.autoAdvance) {
             const hasChoices = scene.choices && scene.choices.length > 0;
+            const hasTeleLogin = scene.actionItems && scene.actionItems.some(i => i.type === 'teleLogin');
+            const hasSlider = scene.actionItems && scene.actionItems.some(i => i.type === 'slider');
             const hasInteractiveItems = scene.actionItems && scene.actionItems.some(
                 i => i.type === 'slider' || i.type === 'teleLogin'
             );
             if (hasChoices || hasInteractiveItems) {
+                const inactivitySeconds = hasTeleLogin ? 15 : hasSlider ? 30 : 5;
                 this.setInactivityTimer(() => {
                     const storyEl = document.getElementById('scene-story');
                     if (this.onSideJob) {
-                        if (storyEl) storyEl.textContent = 'Inactive — returning to shift.';
-                        setTimeout(() => this.displayScene('__return__'), 800);
+                        const elapsed = this.sideJobStartTime
+                            ? Math.floor((Date.now() - this.sideJobStartTime) / 1000)
+                            : 60;
+                        const remaining = Math.max(0, 60 - elapsed);
+                        if (storyEl) storyEl.textContent = remaining > 0
+                            ? 'Inactive — returning to break (' + remaining + 's remaining).'
+                            : 'Inactive — returning to shift.';
+                        // Finalise side-job session
+                        if (this.currentSideJobSession) {
+                            const s = this.currentSideJobSession;
+                            this.sideJobSessions.push({
+                                jobName:  s.jobName,
+                                reward:   this.sideJobRewardsTotal - s.startReward,
+                                correct:  this.totalCorrect   - s.startCorrect,
+                                attempts: this.totalAttempts  - s.startAttempts
+                            });
+                            this.currentSideJobSession = null;
+                        }
+                        this.onSideJob = false;
+                        this.activeSideJob = null;
+                        this.sideJobStartTime = null;
+                        this.updateCurrentJobDisplay();
+                        setTimeout(() => {
+                            if (remaining > 0) {
+                                this.startActualBreak(null, remaining);
+                            } else {
+                                this.displayScene('__nextPatient__');
+                            }
+                        }, 800);
                     } else if (/^(patient|alienPatient)/.test(sceneKey)) {
                         this.patientResults.push({ scene: sceneKey, answer: 'Inactive', correct: undefined, skipped: true });
                         this.totalAttempts++;
                         if (storyEl) storyEl.textContent = 'Inactive — skipping to next patient.';
                         setTimeout(() => this.displayScene('__nextPatient__'), 800);
                     }
-                });
+                }, inactivitySeconds);
             }
         }
 
@@ -890,10 +1195,11 @@ class MainJobGameInstance extends GameInstance {
     }
 
     resolveNextPatient() {
-        const SHIFTS_PER_DAY = 3;
-        const PATIENTS_PER_SHIFT = 2;
+        const patientsPerShift = this.phaseCfg ? this.phaseCfg.patientsPerShift : 2;
+        const shiftsPerDay     = this.phaseCfg ? this.phaseCfg.shiftsPerDay     : 3;
+        const daysCount        = this.phaseCfg ? this.phaseCfg.daysCount        : 5;
 
-        if (this.patientsThisShift < PATIENTS_PER_SHIFT) {
+        if (this.patientsThisShift < patientsPerShift) {
             this.patientsThisShift++;
             return this.patientQueue.shift();
         }
@@ -902,7 +1208,7 @@ class MainJobGameInstance extends GameInstance {
         this.patientsThisShift = 0;
         this.shiftIndex++;
 
-        if (this.shiftIndex < SHIFTS_PER_DAY) {
+        if (this.shiftIndex < shiftsPerDay) {
             return 'startBreak';
         }
 
@@ -910,10 +1216,10 @@ class MainJobGameInstance extends GameInstance {
         this.shiftIndex = 0;
         this.dayIndex++;
 
-        if (this.dayIndex < 5) {
+        if (this.dayIndex < daysCount) {
             return 'dayTransition';
         }
-        return 'endScene';
+        return '__phaseEnd__';
     }
 
     updateDayDisplay() {
@@ -973,10 +1279,11 @@ class MainJobGameInstance extends GameInstance {
         submitBtn.textContent = 'Submit Answer';
         submitBtn.onclick = () => {
             this.clearInactivityTimer();
-            if (parseInt(slider.value) === correctValue) {
+            const val = parseInt(slider.value);
+            if (val === correctValue) {
                 const storyEl = document.getElementById('scene-story');
                 if (storyEl) storyEl.textContent = 'Correct! The value is ' + correctValue + '.';
-                this.onSliderSubmit(true);
+                this.onSliderSubmit(true, val);
                 container.innerHTML = '';
                 const nextBtn = document.createElement('button');
                 nextBtn.textContent = 'Continue';
@@ -985,7 +1292,7 @@ class MainJobGameInstance extends GameInstance {
             } else {
                 const storyEl = document.getElementById('scene-story');
                 if (storyEl) storyEl.textContent = 'Incorrect. Try again. ' + (questionPrompt || '');
-                this.onSliderSubmit(false);
+                this.onSliderSubmit(false, val);
             }
         };
         container.appendChild(submitBtn);
@@ -1080,25 +1387,27 @@ class MainJobGameInstance extends GameInstance {
     showBreakChoice(breakItem) {
         const container = document.getElementById('choices');
 
-        // Countdown display
-        const countdown = document.createElement('p');
+        // Countdown shown in the main panel #break-timer
+        const breakTimerEl = document.getElementById('break-timer');
         let remaining = 10;
-        countdown.textContent = 'Choose within ' + remaining + 's or break starts automatically.';
-        container.appendChild(countdown);
+        if (breakTimerEl) breakTimerEl.textContent = 'Choose within ' + remaining + 's or break starts automatically.';
 
         const countdownInterval = setInterval(() => {
             remaining--;
             if (remaining > 0) {
-                countdown.textContent = 'Choose within ' + remaining + 's or break starts automatically.';
+                if (breakTimerEl) breakTimerEl.textContent = 'Choose within ' + remaining + 's or break starts automatically.';
             } else {
                 clearInterval(countdownInterval);
+                if (breakTimerEl) breakTimerEl.textContent = '';
                 cleanup();
+                if (this.dataCollector) this.dataCollector.recordBreakDecision('Auto-Break');
                 this.startActualBreak(breakItem);
             }
         }, 1000);
 
         const cleanup = () => {
             clearInterval(countdownInterval);
+            if (breakTimerEl) breakTimerEl.textContent = '';
             container.innerHTML = '';
         };
 
@@ -1110,6 +1419,7 @@ class MainJobGameInstance extends GameInstance {
                 ' | Trains: ' + job.actionItem;
             btn.onclick = () => {
                 cleanup();
+                if (this.dataCollector) this.dataCollector.recordBreakDecision(job.name);
                 // continuousWork keeps counting — no reset, no onBreak
                 this.runSideJobAction(job, '__nextPatient__', breakItem.expireScene);
             };
@@ -1120,13 +1430,15 @@ class MainJobGameInstance extends GameInstance {
         breakBtn.textContent = 'Take a Break';
         breakBtn.onclick = () => {
             cleanup();
+            if (this.dataCollector) this.dataCollector.recordBreakDecision('Take a Break');
             this.startActualBreak(breakItem);
         };
         container.appendChild(breakBtn);
     }
 
-    // Starts the real 1-minute break: resets continuousWork, shows coffee screen, returns to main job when done
-    startActualBreak(_breakItem) {
+    // Starts the real break: resets continuousWork, shows coffee screen, returns to main job when done.
+    // duration defaults to 60s; pass a shorter value when resuming after side-job inactivity.
+    startActualBreak(_breakItem, duration = 60) {
         this.onBreak = true;
         this.continuousWorkTime = 0;
         this.updateContinuousWorkDisplay();
@@ -1143,12 +1455,17 @@ class MainJobGameInstance extends GameInstance {
         container.innerHTML = '';
         const coffeeDiv = document.createElement('div');
         coffeeDiv.style.cssText = 'text-align:center;padding:24px';
+        const mins = Math.floor(duration / 60);
+        const secs = duration % 60;
+        const durationStr = mins > 0
+            ? mins + ' minute' + (mins > 1 ? 's' : '') + (secs > 0 ? ' ' + secs + 's' : '')
+            : secs + ' seconds';
         coffeeDiv.innerHTML =
             '<div style="font-size:6em;line-height:1">☕</div>' +
-            '<p style="margin-top:8px;color:#aaa;font-style:italic">Enjoy your break — back in 1 minute.</p>';
+            '<p style="margin-top:8px;color:#aaa;font-style:italic">Enjoy your break — back in ' + durationStr + '.</p>';
         container.appendChild(coffeeDiv);
 
-        this.startBreakTimer(60, () => {
+        this.startBreakTimer(duration, () => {
             this.onBreak = false;
             this.stopBreakTimer();       // clears the "Break: 00:00" display text
             container.innerHTML = '';
@@ -1161,6 +1478,7 @@ class MainJobGameInstance extends GameInstance {
     // sceneLookupKey is used to look up startSceneMap (defaults to returnScene if not provided).
     runSideJobAction(job, returnScene, sceneLookupKey) {
         this.stopBreakTimer();
+        this.sideJobStartTime = Date.now();
         // Always show "Starting Next Shift" transition after side job completes
         this.pendingReturnScene = 'shiftTransition';
         this.onSideJob = true;
@@ -1190,6 +1508,7 @@ class MainJobGameInstance extends GameInstance {
         clearTimeout(this.autoAdvanceTimeout);
         clearInterval(this.autoAdvanceCountdownInterval);
         clearTimeout(this.inactivityTimeout);
+        clearInterval(this._inactivityCountdownInterval);
     }
 
     storeGameData() {
@@ -1230,22 +1549,28 @@ class MainJobGameInstance extends GameInstance {
         this.shiftIndex = 0;
         this.patientsThisShift = 0;
 
-        // Build and shuffle patient queue (30 patients: 20 known + 10 alien)
-        const pool = ['patient1','patient2','patient3','patient4','patient5',
-                      'patient6','patient7','patient8','patient9','patient10',
-                      'patient11','patient12','patient13','patient14','patient15',
-                      'patient16','patient17','patient18','patient19','patient20',
-                      'alienPatient1','alienPatient2','alienPatient3','alienPatient4','alienPatient5',
-                      'alienPatient6','alienPatient7','alienPatient8','alienPatient9','alienPatient10'];
+        // Build and shuffle patient queue from phase pool or fall back to Phase 1 default
+        const pool = (this.patientPool && this.patientPool.length > 0)
+            ? this.patientPool.slice()
+            : PHASE1_PATIENTS.slice();
         for (let i = pool.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
         }
         this.patientQueue = pool;
 
+        // Show sidebar immediately (PhaseOrchestrator flow doesn't use showIntroScreen overlay)
+        const sidebar = document.getElementById('progress-sidebar');
+        if (sidebar) sidebar.classList.remove('hidden');
+        const gameView = document.getElementById('game-view');
+        if (gameView) { gameView.classList.add('active'); gameView.classList.remove('hidden'); }
+        const overlay = document.getElementById('intro-overlay');
+        if (overlay) overlay.classList.remove('active');
+
         // Restore showGameView (may have been suppressed by showIntroScreen)
         delete this.showGameView;
 
+        this.updateDayDisplay();
         super.start();
         this.startContinuousWorkTimer();
     }
@@ -1281,46 +1606,115 @@ class MainJobTaskManager extends TaskManager {
 
 
 // =============================================================================
+// Side-job factory
+// =============================================================================
+
+function buildAllSideJobs() {
+    return {
+        telemedicine: new SideJob({
+            id: 'telemedicine',
+            name: 'Telemedicine',
+            actionItem: 'choices',
+            reward: 5,
+            similarity: 0.8,
+            startScenes: ['telemedicine1', 'telemedicine2']
+        }),
+        medschool: new SideJob({
+            id: 'medschool',
+            name: 'Medical School',
+            actionItem: 'knowledge',
+            reward: 0,
+            similarity: 0.5,
+            startScene: 'medSchoolStart'
+        }),
+        uber: new SideJob({
+            id: 'uber',
+            name: 'Ride Sharing',
+            actionItem: 'driving',
+            reward: 5,
+            similarity: 0.3,
+            startScene: 'uberStart'
+        })
+    };
+}
+
+
+// =============================================================================
+// PhaseOrchestrator — sequences phases and owns the DataCollector
+// =============================================================================
+
+class PhaseOrchestrator {
+    constructor(config) {
+        this.Q             = config.Q;
+        this.scenes        = config.scenes;
+        this.allSideJobs   = config.allSideJobs;
+        this.dataCollector = config.dataCollector;
+        this.onComplete    = config.onComplete || null;
+        this.phaseOrder    = PHASE_CONFIG.phaseOrder;
+        this.phaseIndex    = 0;
+        this.currentInstance = null;
+    }
+
+    start() {
+        this.phaseIndex = 0;
+        this._launchPhase(this.phaseOrder[0]);
+    }
+
+    _launchPhase(phaseId) {
+        const phaseCfg  = PHASE_CONFIG.phases[phaseId];
+        this.dataCollector.setPhase(phaseId);
+
+        const sideJobs  = (phaseCfg.sideJobMenu || [])
+            .map(id => this.allSideJobs[id])
+            .filter(Boolean);
+
+        const patientPool = PATIENT_POOLS[phaseCfg.patientPool] || [];
+
+        this.currentInstance = new MainJobGameInstance({
+            Q:             this.Q,
+            scenes:        this.scenes,
+            startScene:    phaseCfg.startScene,
+            sideJobs:      sideJobs,
+            phaseId:       phaseId,
+            phaseCfg:      phaseCfg,
+            patientPool:   patientPool,
+            dataCollector: this.dataCollector,
+            onPhaseEnd:    (stats) => {
+                this.dataCollector.saveToQualtrics();
+                this.phaseIndex++;
+                if (this.phaseIndex < this.phaseOrder.length) {
+                    this._launchPhase(this.phaseOrder[this.phaseIndex]);
+                } else if (this.onComplete) {
+                    this.onComplete(stats);
+                }
+            }
+        });
+
+        this.currentInstance.start();
+    }
+}
+
+
+// =============================================================================
 // Qualtrics entry point
 // =============================================================================
 
 Qualtrics.SurveyEngine.addOnload(function() {
-    let Q = this;
+    const Q = this;
     Q.disableNextButton();
 
-    const telemedicineJob = new SideJob({
-        name: 'Telemedicine',
-        actionItem: 'choices',
-        reward: 5,
-        similarity: 0.8,
-        startSceneMap: { 'breakEnd': 'telemedicine1', 'breakEnd2': 'telemedicine2' }
+    const dataCollector = new DataCollector();
+    const allSideJobs   = buildAllSideJobs();
+
+    const orchestrator = new PhaseOrchestrator({
+        Q:             Q,
+        scenes:        ALL_SCENES.scenes,
+        allSideJobs:   allSideJobs,
+        dataCollector: dataCollector,
+        onComplete:    () => { Q.enableNextButton(); }
     });
-    const medSchoolJob = new SideJob({ name: 'Medical School', actionItem: 'knowledge', reward: 0, similarity: 0.5, startScene: 'medSchoolStart' });
-    const uberJob = new SideJob({ name: 'Ride Sharing', actionItem: 'driving', reward: 5, similarity: 0.3, startScene: 'uberStart' });
 
-    const tracker = new PerformanceTracker();
-    const taskManager = new MainJobTaskManager(tracker, [telemedicineJob, medSchoolJob, uberJob]);
-
-    taskManager.register(new TaskType({ id: 'telemedicine', name: 'Telemedicine', scenesData: TELEMEDICINE_SCENES }));
-
-    taskManager.switchTo('telemedicine', Q)
-        .then(() => { taskManager.activeGame.start(); })
-        .catch(err => { console.error('Failed to load task:', err); });
-
-    function hideEl(element) {
-        element.hide();
-    }
-
-    var nb = $('NextButton');
-    const regex = /^{"T":.*?"A":.*?]}$/;
-    hideEl.defer(nb);
-    $(this.questionId).down('.InputText').on('keyup', function() {
-        if (taskManager.activeGame && taskManager.activeGame.currentScene === 'endScene') {
-            return;
-        }
-        if (regex.test(this.value)) nb.show();
-        else nb.hide();
-    });
+    orchestrator.start();
 });
 
 
@@ -1501,13 +1895,9 @@ const TELEMEDICINE_SCENES = {
         },
         patient5: {
             title: "Patient ID: 5",
-            story: "Alex, 38, has sudden onset severe chest pain, difficulty breathing, and left-arm numbness. He says it came out of nowhere. What is your diagnosis?",
-            choices: [
-                { text: "Heart Attack",   next: '__nextPatient__', correct: true  },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
-                { text: "Migraine",       next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            story: "Alex, 38, requires a beta-blocker for a cardiac arrhythmia. His weight is 70 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 35, nextScene: '__nextPatient__', hint: 'Multiply 70 kg × 0.5 mg/kg.' }
             ]
         },
         endScene: {
@@ -1529,13 +1919,9 @@ const TELEMEDICINE_SCENES = {
         },
         patient7: {
             title: "Patient ID: 7",
-            story: "Carlos, 65, has a persistent cough, fever, chills, and difficulty breathing deeply. What is your diagnosis?",
-            choices: [
-                { text: "Pneumonia",      next: '__nextPatient__', correct: true  },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Flu",            next: '__nextPatient__', correct: false },
-                { text: "Stroke",         next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            story: "Carlos, 65, needs an anticoagulant before surgery. His weight is 90 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 45, nextScene: '__nextPatient__', hint: 'Multiply 90 kg × 0.5 mg/kg.' }
             ]
         },
         patient8: {
@@ -1551,13 +1937,9 @@ const TELEMEDICINE_SCENES = {
         },
         patient9: {
             title: "Patient ID: 9",
-            story: "David, 72, woke up unable to lift his right arm and is slurring his words noticeably. What is your diagnosis?",
-            choices: [
-                { text: "Stroke",         next: '__nextPatient__', correct: true  },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            story: "David, 72, requires a diuretic for fluid retention. His weight is 100 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 50, nextScene: '__nextPatient__', hint: 'Multiply 100 kg × 0.5 mg/kg.' }
             ]
         },
         patient10: {
@@ -1573,13 +1955,9 @@ const TELEMEDICINE_SCENES = {
         },
         patient11: {
             title: "Patient ID: 11",
-            story: "Tom, 52, clutches his chest and says the pain radiates into his jaw. He is short of breath and nauseous. What is your diagnosis?",
-            choices: [
-                { text: "Heart Attack",   next: '__nextPatient__', correct: true  },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
-                { text: "Migraine",       next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            story: "Tom, 52, needs a post-operative painkiller. His weight is 110 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 55, nextScene: '__nextPatient__', hint: 'Multiply 110 kg × 0.5 mg/kg.' }
             ]
         },
         patient12: {
@@ -1595,13 +1973,9 @@ const TELEMEDICINE_SCENES = {
         },
         patient13: {
             title: "Patient ID: 13",
-            story: "James, 47, has a fever of 102°F, a rattling cough, and says his chest feels tight when he inhales. What is your diagnosis?",
-            choices: [
-                { text: "Pneumonia",      next: '__nextPatient__', correct: true  },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Flu",            next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            story: "James, 47, needs an antibiotic for a bacterial infection. His weight is 60 kg and the prescribed dose is 1 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 60, nextScene: '__nextPatient__', hint: 'Multiply 60 kg × 1 mg/kg.' }
             ]
         },
         patient14: {
@@ -1617,13 +1991,9 @@ const TELEMEDICINE_SCENES = {
         },
         patient15: {
             title: "Patient ID: 15",
-            story: "Michael, 60, suddenly cannot lift his left arm and is having trouble finding words mid-sentence. What is your diagnosis?",
-            choices: [
-                { text: "Stroke",         next: '__nextPatient__', correct: true  },
-                { text: "Migraine",       next: '__nextPatient__', correct: false },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            story: "Michael, 60, requires an anti-inflammatory after a joint procedure. His weight is 70 kg and the prescribed dose is 1 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 70, nextScene: '__nextPatient__', hint: 'Multiply 70 kg × 1 mg/kg.' }
             ]
         },
         patient16: {
@@ -1639,13 +2009,9 @@ const TELEMEDICINE_SCENES = {
         },
         patient17: {
             title: "Patient ID: 17",
-            story: "Chris, 57, reports squeezing chest pain with shortness of breath and lightheadedness. What is your diagnosis?",
-            choices: [
-                { text: "Heart Attack",   next: '__nextPatient__', correct: true  },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Stroke",         next: '__nextPatient__', correct: false },
-                { text: "Flu",            next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            story: "Chris, 57, needs a sedative before a procedure. His weight is 75 kg and the prescribed dose is 1 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 75, nextScene: '__nextPatient__', hint: 'Multiply 75 kg × 1 mg/kg.' }
             ]
         },
         patient18: {
@@ -1661,24 +2027,16 @@ const TELEMEDICINE_SCENES = {
         },
         patient19: {
             title: "Patient ID: 19",
-            story: "Kevin, 68, presents with facial drooping on his right side and cannot raise both arms evenly. What is your diagnosis?",
-            choices: [
-                { text: "Stroke",         next: '__nextPatient__', correct: true  },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
-                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            story: "Kevin, 68, needs an analgesic after surgery. His weight is 40 kg and the prescribed dose is 2 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 80, nextScene: '__nextPatient__', hint: 'Multiply 40 kg × 2 mg/kg.' }
             ]
         },
         patient20: {
             title: "Patient ID: 20",
-            story: "Amy, 41, has fever, chills, and a wet productive cough that has worsened over four days. What is your diagnosis?",
-            choices: [
-                { text: "Pneumonia",      next: '__nextPatient__', correct: true  },
-                { text: "Stroke",         next: '__nextPatient__', correct: false },
-                { text: "Flu",            next: '__nextPatient__', correct: false },
-                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
-                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            story: "Amy, 41, requires an anticoagulant for a blood clot. Her weight is 60 kg and the prescribed dose is 1.5 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 90, nextScene: '__nextPatient__', hint: 'Multiply 60 kg × 1.5 mg/kg.' }
             ]
         },
 
@@ -1856,6 +2214,208 @@ const TELEMEDICINE_SCENES = {
             title: "Day Complete!",
             story: "Rest up. Tomorrow starts soon.",
             autoAdvance: { delay: 5000, next: '__nextPatient__' }
+        },
+
+        // ── Phase 3 new patients (patient21–patient30) ────────────────────────
+        patient21: {
+            title: "Patient ID: 21",
+            story: "Elena, 55, has had a high fever, productive cough, and chills for three days. She is short of breath. What is your diagnosis?",
+            choices: [
+                { text: "Pneumonia",      next: '__nextPatient__', correct: true  },
+                { text: "Flu",            next: '__nextPatient__', correct: false },
+                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
+                { text: "Migraine",       next: '__nextPatient__', correct: false },
+                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            ]
+        },
+        patient22: {
+            title: "Patient ID: 22",
+            story: "Marcus, 44, requires a blood thinner before hip surgery. His weight is 80 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 40, nextScene: '__nextPatient__', hint: 'Multiply 80 kg × 0.5 mg/kg.' }
+            ]
+        },
+        patient23: {
+            title: "Patient ID: 23",
+            story: "Yuki, 68, suddenly cannot move her right arm and is slurring her words. What is your diagnosis?",
+            choices: [
+                { text: "Stroke",         next: '__nextPatient__', correct: true  },
+                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
+                { text: "Pneumonia",      next: '__nextPatient__', correct: false },
+                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
+                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            ]
+        },
+        patient24: {
+            title: "Patient ID: 24",
+            story: "Luca, 61, needs a diuretic for congestive heart failure. His weight is 120 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 60, nextScene: '__nextPatient__', hint: 'Multiply 120 kg × 0.5 mg/kg.' }
+            ]
+        },
+        patient25: {
+            title: "Patient ID: 25",
+            story: "Fatima, 50, has crushing chest pain radiating to her left arm and is pale and sweaty. What is your diagnosis?",
+            choices: [
+                { text: "Heart Attack",   next: '__nextPatient__', correct: true  },
+                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
+                { text: "Stroke",         next: '__nextPatient__', correct: false },
+                { text: "Flu",            next: '__nextPatient__', correct: false },
+                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            ]
+        },
+        patient26: {
+            title: "Patient ID: 26",
+            story: "Ravi, 36, needs a sedative before an MRI. His weight is 65 kg and the prescribed dose is 1 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 65, nextScene: '__nextPatient__', hint: 'Multiply 65 kg × 1 mg/kg.' }
+            ]
+        },
+        patient27: {
+            title: "Patient ID: 27",
+            story: "Nadia, 29, is shaking, sweating, and her heart is racing. She says the feeling came on suddenly with no clear cause. What is your diagnosis?",
+            choices: [
+                { text: "Anxiety Attack", next: '__nextPatient__', correct: true  },
+                { text: "Heart Attack",   next: '__nextPatient__', correct: false },
+                { text: "Flu",            next: '__nextPatient__', correct: false },
+                { text: "Stroke",         next: '__nextPatient__', correct: false },
+                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            ]
+        },
+        patient28: {
+            title: "Patient ID: 28",
+            story: "Owen, 73, needs an analgesic infusion after knee replacement. His weight is 85 kg and the prescribed dose is 1 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 85, nextScene: '__nextPatient__', hint: 'Multiply 85 kg × 1 mg/kg.' }
+            ]
+        },
+        patient29: {
+            title: "Patient ID: 29",
+            story: "Sera, 31, has a severe one-sided headache with nausea and cannot tolerate any light or sound. What is your diagnosis?",
+            choices: [
+                { text: "Migraine",       next: '__nextPatient__', correct: true  },
+                { text: "Stroke",         next: '__nextPatient__', correct: false },
+                { text: "Flu",            next: '__nextPatient__', correct: false },
+                { text: "Anxiety Attack", next: '__nextPatient__', correct: false },
+                { text: "Skip (no reward / no penalty)", next: '__nextPatient__', skip: true }
+            ]
+        },
+        patient30: {
+            title: "Patient ID: 30",
+            story: "Jin, 58, requires an anticoagulant after a cardiac procedure. His weight is 70 kg and the prescribed dose is 1.5 mg per kg. Calculate the correct total dose in mg.",
+            actionItems: [
+                { type: 'slider', correctValue: 105, nextScene: '__nextPatient__', hint: 'Multiply 70 kg × 1.5 mg/kg.' }
+            ]
+        },
+
+        // ── Tutorial scenes ───────────────────────────────────────────────────
+        tutorialIntro: {
+            title: "Welcome to the Work Simulator",
+            story: "You are a hospital doctor working a 5-day week. Each shift you will see patients, diagnose illnesses, and calculate medication doses. During breaks you can earn extra money through side jobs. Let's walk through each mechanic now.",
+            choices: [{ text: "Let's begin the tutorial →", next: 'tutorial_hospital_intro' }]
+        },
+        tutorial_hospital_intro: {
+            title: "Your Main Job: Hospital Doctor",
+            story: "At the hospital you will see a series of patients. For each patient, read their symptoms carefully and choose the correct diagnosis. A correct diagnosis earns you $15. An incorrect one costs you $5. You may also skip for no reward or penalty.",
+            choices: [{ text: "Try a diagnosis now →", next: 'tutorial_hospital_patient' }]
+        },
+        tutorial_hospital_patient: {
+            title: "Practice: Diagnose a Patient",
+            story: "John presents with fever, persistent coughing, and shortness of breath. What is your diagnosis?",
+            choices: [
+                { text: "Pneumonia (correct)", next: 'tutorial_hospital_dose_intro' },
+                { text: "Flu",                 next: 'tutorial_hospital_dose_intro' },
+                { text: "Stroke",              next: 'tutorial_hospital_dose_intro' },
+                { text: "Heart Attack",        next: 'tutorial_hospital_dose_intro' }
+            ]
+        },
+        tutorial_hospital_dose_intro: {
+            title: "Dosage Calculation Tasks",
+            story: "Some patients require a medication dose calculated from their body weight. You will use a slider to select the dose in milligrams. The formula is always: weight (kg) × dose per kg (mg/kg) = total dose (mg).",
+            choices: [{ text: "Try a dosage calculation →", next: 'tutorial_hospital_dose' }]
+        },
+        tutorial_hospital_dose: {
+            title: "Practice: Calculate a Dose",
+            story: "A patient weighs 80 kg. The prescribed medication requires 0.5 mg per kg. Move the slider to the correct total dose in mg. (Hint: 80 × 0.5 = 40)",
+            actionItems: [
+                { type: 'slider', correctValue: 40, nextScene: 'tutorial_tele_intro', hint: 'Multiply 80 kg × 0.5 mg/kg.' }
+            ]
+        },
+        tutorial_tele_intro: {
+            title: "Side Job: Telemedicine",
+            story: "Between shifts you can take side jobs. Telemedicine lets you consult with remote patients and earn $5 per session. It is the most similar to your hospital work. Try a telemedicine case now.",
+            choices: [{ text: "Open a telemedicine case →", next: 'tutorial_tele_case' }]
+        },
+        tutorial_tele_case: {
+            title: "Telemedicine Practice",
+            story: "A remote patient reports a sudden throbbing headache on one side that worsens with light. What is your diagnosis?",
+            choices: [
+                { text: "Migraine", next: 'tutorial_tele_correct' },
+                { text: "Flu",      next: 'tutorial_tele_wrong'   }
+            ]
+        },
+        tutorial_tele_correct: {
+            title: "Correct!",
+            story: "Great — Migraine is right. The one-sided throbbing headache and light sensitivity are classic signs. You've earned your telemedicine bonus.",
+            choices: [{ text: "Next →", next: 'tutorial_uber_intro' }]
+        },
+        tutorial_tele_wrong: {
+            title: "Incorrect",
+            story: "Not quite — the correct answer is Migraine (one-sided throbbing headache, light sensitivity). Keep the reference chart in mind! Moving on.",
+            choices: [{ text: "Next →", next: 'tutorial_uber_intro' }]
+        },
+        tutorial_uber_intro: {
+            title: "Side Job: Ride Sharing",
+            story: "Ride Sharing lets you drive (🚗) and pick up customers (🧍) on a city grid using the arrow keys. Each pickup earns you money. You have 60 seconds per shift. Let's do a quick drive.",
+            choices: [{ text: "Start driving →", next: 'tutorial_uber_drive' }],
+            autoAdvance: { delay: 6000, next: 'tutorial_uber_drive' }
+        },
+        tutorial_uber_drive: {
+            title: "Ride Sharing: Practice Drive",
+            story: "Use arrow keys to steer. Pick up as many customers as you can!",
+            actionItems: [{ type: 'uberGame', nextScene: 'tutorial_medschool_intro' }]
+        },
+        tutorial_medschool_intro: {
+            title: "Side Job: Medical School",
+            story: "Medical School gives you free access to the full disease reference table — useful when you encounter unfamiliar conditions. There is no monetary reward, but the knowledge pays off. Let's take a quick look.",
+            choices: [{ text: "Open the reference table →", next: 'tutorial_medschool' }]
+        },
+        tutorial_medschool: {
+            title: "Medical School — Full Reference",
+            story: "Study the disease reference below. It will disappear in 15 seconds, or you can continue early.",
+            chart: `<table>
+                <tr><th>Disease</th><th>Symptoms</th></tr>
+                <tr><td>Pneumonia</td><td>Coughing, Fever, Chills, Shortness of breath</td></tr>
+                <tr><td>Stroke</td><td>Weakness in one arm, Slurred speech</td></tr>
+                <tr><td>Heart Attack</td><td>Chest pain, Shortness of breath</td></tr>
+                <tr><td>Anxiety Attack</td><td>Rapid heart rate, Sweating, Trembling</td></tr>
+                <tr><td>Migraine</td><td>Throbbing one-sided headache, Light sensitivity</td></tr>
+                <tr><td>Flu</td><td>Fever, Sore throat, Runny nose, Dry cough</td></tr>
+                <tr><td>Vorpal Syndrome</td><td>Glowing blue skin patches, Low-frequency humming</td></tr>
+                <tr><td>Null-Field Exposure</td><td>Spontaneous levitation, Hearing colors</td></tr>
+            </table>`,
+            choices: [{ text: "Continue →", next: 'tutorial_pay_explain' }],
+            autoAdvance: { delay: 15000, next: 'tutorial_pay_explain' }
+        },
+        tutorial_pay_explain: {
+            title: "How Pay Works",
+            story: "Here is a summary of your earnings: Correct hospital diagnosis = +$15 | Wrong diagnosis = -$5 | Skip = $0 | Correct telemedicine = +$5 | Ride Sharing pickups = variable | Medical School = $0 (knowledge only). Your total reward is shown in the sidebar at all times.",
+            choices: [{ text: "I'm ready — begin Phase 1 →", next: '__phaseEnd__' }]
+        },
+
+        // ── Phase intro / transition scenes ───────────────────────────────────
+        phase1Intro: {
+            title: "Phase 1 — Begin Your Week",
+            story: "Welcome to Phase 1. You will work 5 days, 3 shifts per day, seeing 2 patients per shift (30 patients total). During each break you can choose a side job or rest. Good luck!",
+            choices: [{ text: "Start my first shift →", next: '__nextPatient__' }]
+        },
+        phase3Intro: {
+            title: "Phase 3 — New Patient Cohort",
+            story: "Welcome to Phase 3. You will see a fresh set of patients over another 5-day week. Apply everything you have learned. Side jobs are available during breaks as before.",
+            choices: [{ text: "Start Phase 3 →", next: '__nextPatient__' }]
         }
     }
 };
+
+// Single merged scene object used by PhaseOrchestrator
+const ALL_SCENES = TELEMEDICINE_SCENES;
