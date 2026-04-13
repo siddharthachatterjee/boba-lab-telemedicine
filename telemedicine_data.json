@@ -1,0 +1,1509 @@
+{
+    "startScene": "intro",
+    "scenes": {
+      "intro": {
+        "title": "Introduction",
+        "story": "Good morning. Let's begin your shift.",
+        "chart": "<table>\n                <tr><th>Disease</th><th>Symptoms</th></tr>\n                <tr><td>Pneumonia</td><td>Coughing, Fever, Chills, Shortness of breath</td></tr>\n                <tr><td>Stroke</td><td>Weakness in one arm, Slurred speech</td></tr>\n                <tr><td>Heart Attack</td><td>Chest pain, Shortness of breath</td></tr>\n                <tr><td>Anxiety Attack</td><td>Rapid heart rate, Sweating, Trembling</td></tr>\n            </table>",
+        "choices": [
+          {
+            "text": "Yes, I'm ready!",
+            "next": "__nextPatient__"
+          }
+        ]
+      },
+      "patient1": {
+        "title": "Patient ID: 1",
+        "story": "John presents with fever, persistent coughing, and shortness of breath. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Pneumonia",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient2": {
+        "title": "Patient ID: 2",
+        "story": "Jane has sudden weakness in her left arm and is having difficulty speaking clearly. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Pneumonia",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient3": {
+        "title": "Patient ID: 3",
+        "story": "Robert is a 52-year-old male with a heart condition. Calculate the correct medication dose based on his weight of 80kg. Each kg requires 0.5 units.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 40,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply the weight (80kg) by the dosage per kg (0.5 units)."
+          }
+        ]
+      },
+      "startBreak": {
+        "title": "Break #1",
+        "story": "You may choose any side job to work on, or enjoy a break. Side jobs are listed by similarity to your main job.",
+        "actionItems": [
+          {
+            "type": "breakTimer",
+            "duration": 20,
+            "expireScene": "breakEnd"
+          }
+        ]
+      },
+      "breakRoom": {
+        "title": "Breakroom",
+        "story": "You've finished available telemedicine visits. Sit tight and enjoy yourself until your break is over!"
+      },
+      "breakEnd": {
+        "title": "Break Over",
+        "story": "Your break is over. Time to get back to work!",
+        "actionItems": [
+          {
+            "type": "stopBreakTimer"
+          }
+        ],
+        "choices": [
+          {
+            "text": "Start Next Shift",
+            "next": "__nextPatient__"
+          }
+        ]
+      },
+      "telemedicine1": {
+        "title": "Telemedicine Session 1",
+        "story": "Welcome to your first telemedicine session. Enter your session password to access the portal.",
+        "actionItems": [
+          {
+            "type": "teleLogin",
+            "nextScene": "telePatient1_1"
+          }
+        ]
+      },
+      "telePatient1_1": {
+        "title": "Telemedicine Patient 1",
+        "story": "Zoe has had a headache for over an hour as well as sensitivity to light. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Flu",
+            "next": "telePatient1_1Wrong"
+          },
+          {
+            "text": "Migraine",
+            "next": "telePatient1_1Correct"
+          }
+        ]
+      },
+      "telePatient1_1Correct": {
+        "title": "Correct",
+        "story": "Zoe's symptoms are indicative of a migraine. Proceed to the next patient.",
+        "actionItems": [
+          {
+            "type": "incrementTelemedicine"
+          }
+        ],
+        "choices": [
+          {
+            "text": "Next Telemedicine patient",
+            "next": "telePatient1_2"
+          }
+        ]
+      },
+      "telePatient1_1Wrong": {
+        "title": "Incorrect",
+        "story": "Zoe's symptoms do not suggest the flu.",
+        "actionItems": [
+          {
+            "type": "incrementTelemedicine"
+          }
+        ],
+        "choices": [
+          {
+            "text": "Next Telemedicine Patient",
+            "next": "telePatient1_2"
+          }
+        ]
+      },
+      "telePatient1_2": {
+        "title": "Telemedicine Patient 2",
+        "story": "Jaime has a fever, cough, sore throat, and stuffy nose. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Flu",
+            "next": "telePatient1_2Correct"
+          },
+          {
+            "text": "Migraine",
+            "next": "telePatient1_2Wrong"
+          }
+        ]
+      },
+      "telePatient1_2Correct": {
+        "title": "Correct",
+        "story": "Jaime's symptoms suggest the flu.",
+        "actionItems": [
+          {
+            "type": "incrementTelemedicine"
+          }
+        ],
+        "choices": [
+          {
+            "text": "Return to Break room",
+            "next": "__return__"
+          }
+        ]
+      },
+      "telePatient1_2Wrong": {
+        "title": "Incorrect",
+        "story": "Jaime's symptoms are not indicative of a migraine.",
+        "actionItems": [
+          {
+            "type": "incrementTelemedicine"
+          }
+        ],
+        "choices": [
+          {
+            "text": "Return to Break room",
+            "next": "__return__"
+          }
+        ]
+      },
+      "patient4": {
+        "title": "Patient ID: 4",
+        "story": "Ishan is a 45-year-old male reporting acute chest pressure and sudden shortness of breath. He is sweating and pale. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "startBreak2": {
+        "title": "Break #2",
+        "story": "You may choose any side job to work on, or enjoy a break. Side jobs are listed by similarity to your main job.",
+        "actionItems": [
+          {
+            "type": "breakTimer",
+            "duration": 20,
+            "expireScene": "breakEnd2"
+          }
+        ]
+      },
+      "breakEnd2z": {
+        "title": "Break Over",
+        "story": "Your break is over. Time to get back to work!",
+        "actionItems": [
+          {
+            "type": "stopBreakTimer"
+          }
+        ],
+        "choices": [
+          {
+            "text": "Start Next Shift",
+            "next": "__nextPatient__"
+          }
+        ]
+      },
+      "telemedicine2": {
+        "title": "Telemedicine Session 2",
+        "story": "Welcome back to the telemedicine portal. Enter your session password to continue.",
+        "actionItems": [
+          {
+            "type": "teleLogin",
+            "nextScene": "telePatient2_1"
+          }
+        ]
+      },
+      "telePatient2_1": {
+        "title": "Telemedicine Patient 2.1",
+        "story": "Sam has been experiencing recurring headaches and sensitivity to light. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Flu",
+            "next": "telePatient2_1Wrong"
+          },
+          {
+            "text": "Migraine",
+            "next": "telePatient2_1Correct"
+          }
+        ]
+      },
+      "telePatient2_1Correct": {
+        "title": "Correct",
+        "story": "Sam's symptoms are indicative of a migraine. Proceed to the next patient.",
+        "actionItems": [
+          {
+            "type": "incrementTelemedicine"
+          }
+        ],
+        "choices": [
+          {
+            "text": "Next Telemedicine patient",
+            "next": "telePatient2_2"
+          }
+        ]
+      },
+      "telePatient2_1Wrong": {
+        "title": "Incorrect",
+        "story": "Sam's symptoms do not suggest the flu.",
+        "actionItems": [
+          {
+            "type": "incrementTelemedicine"
+          }
+        ],
+        "choices": [
+          {
+            "text": "Next Telemedicine Patient",
+            "next": "telePatient2_2"
+          }
+        ]
+      },
+      "telePatient2_2": {
+        "title": "Telemedicine Patient 2.2",
+        "story": "Linda has a fever, cough, sore throat, and a stuffy nose. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Flu",
+            "next": "telePatient2_2Correct"
+          },
+          {
+            "text": "Migraine",
+            "next": "telePatient2_2Wrong"
+          }
+        ]
+      },
+      "telePatient2_2Correct": {
+        "title": "Correct",
+        "story": "Linda's symptoms suggest the flu.",
+        "actionItems": [
+          {
+            "type": "incrementTelemedicine"
+          }
+        ],
+        "choices": [
+          {
+            "text": "Return to Break room",
+            "next": "__return__"
+          }
+        ]
+      },
+      "telePatient2_2Wrong": {
+        "title": "Incorrect",
+        "story": "Linda's symptoms are not indicative of a migraine.",
+        "actionItems": [
+          {
+            "type": "incrementTelemedicine"
+          }
+        ],
+        "choices": [
+          {
+            "text": "Return to Break room",
+            "next": "__return__"
+          }
+        ]
+      },
+      "patient5": {
+        "title": "Patient ID: 5",
+        "story": "Alex, 38, requires a beta-blocker for a cardiac arrhythmia. His weight is 70 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 35,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 70 kg × 0.5 mg/kg."
+          }
+        ]
+      },
+      "endScene": {
+        "title": "Week Complete!",
+        "story": "Your week is over. Review your patient diagnoses below.",
+        "actionItems": [
+          {
+            "type": "endGame"
+          }
+        ]
+      },
+      "patient6": {
+        "title": "Patient ID: 6",
+        "story": "Maria, 28, presents with fever, cough, sore throat, and a congested nose. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Pneumonia",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Migraine",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient7": {
+        "title": "Patient ID: 7",
+        "story": "Carlos, 65, needs an anticoagulant before surgery. His weight is 90 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 45,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 90 kg × 0.5 mg/kg."
+          }
+        ]
+      },
+      "patient8": {
+        "title": "Patient ID: 8",
+        "story": "Sarah, 40, reports a sudden racing heart, profuse sweating, and uncontrollable trembling. She says it came on out of nowhere. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Pneumonia",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient9": {
+        "title": "Patient ID: 9",
+        "story": "David, 72, requires a diuretic for fluid retention. His weight is 100 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 50,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 100 kg × 0.5 mg/kg."
+          }
+        ]
+      },
+      "patient10": {
+        "title": "Patient ID: 10",
+        "story": "Lisa, 35, has had a throbbing headache for two hours and cannot tolerate bright light. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Migraine",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient11": {
+        "title": "Patient ID: 11",
+        "story": "Tom, 52, needs a post-operative painkiller. His weight is 110 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 55,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 110 kg × 0.5 mg/kg."
+          }
+        ]
+      },
+      "patient12": {
+        "title": "Patient ID: 12",
+        "story": "Emma, 33, is shaking, sweating, and feels her heart pounding. She just received unexpected news. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient13": {
+        "title": "Patient ID: 13",
+        "story": "James, 47, needs an antibiotic for a bacterial infection. His weight is 60 kg and the prescribed dose is 1 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 60,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 60 kg × 1 mg/kg."
+          }
+        ]
+      },
+      "patient14": {
+        "title": "Patient ID: 14",
+        "story": "Sophie, 26, has a severe one-sided headache lasting three hours, worsened by any light. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Migraine",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient15": {
+        "title": "Patient ID: 15",
+        "story": "Michael, 60, requires an anti-inflammatory after a joint procedure. His weight is 70 kg and the prescribed dose is 1 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 70,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 70 kg × 1 mg/kg."
+          }
+        ]
+      },
+      "patient16": {
+        "title": "Patient ID: 16",
+        "story": "Hannah, 43, has had a sore throat, runny nose, mild fever, and a dry cough for two days. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Pneumonia",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Migraine",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient17": {
+        "title": "Patient ID: 17",
+        "story": "Chris, 57, needs a sedative before a procedure. His weight is 75 kg and the prescribed dose is 1 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 75,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 75 kg × 1 mg/kg."
+          }
+        ]
+      },
+      "patient18": {
+        "title": "Patient ID: 18",
+        "story": "Priya, 34, is trembling and hyperventilating. She says her heart is racing and she feels a sense of dread. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Pneumonia",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient19": {
+        "title": "Patient ID: 19",
+        "story": "Kevin, 68, needs an analgesic infusion after surgery. His weight is 40 kg and the prescribed dose is 2 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 80,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 40 kg × 2 mg/kg."
+          }
+        ]
+      },
+      "patient20": {
+        "title": "Patient ID: 20",
+        "story": "Amy, 41, requires an anticoagulant for a blood clot. Her weight is 60 kg and the prescribed dose is 1.5 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 90,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 60 kg × 1.5 mg/kg."
+          }
+        ]
+      },
+      "alienPatient1": {
+        "title": "Unknown Patient",
+        "story": "Patient ZX-9 presents with glowing blue skin patches and emits a low-frequency hum. This condition does not appear in your standard reference materials. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Vorpal Syndrome",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Null-Field Exposure",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Pneumonia",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "alienPatient2": {
+        "title": "Unknown Patient",
+        "story": "Patient QT-3 experiences brief spontaneous levitation and reports that they can 'hear' colors. This condition is not in your reference table. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Null-Field Exposure",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Vorpal Syndrome",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "alienPatient3": {
+        "title": "Unknown Patient",
+        "story": "Patient RX-5 has faintly glowing patches along their neck and arms that pulse with a soft hum. Your reference materials have no record of this. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Vorpal Syndrome",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Null-Field Exposure",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "alienPatient4": {
+        "title": "Unknown Patient",
+        "story": "Patient QK-7 floated twelve inches off the exam table and claims everything they see has a sound. Your reference materials have no record of this. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Null-Field Exposure",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Vorpal Syndrome",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Pneumonia",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "alienPatient5": {
+        "title": "Unknown Patient",
+        "story": "Patient ZT-2 emits a steady low harmonic tone and has bioluminescent streaks across their torso. Your reference materials have no record of this. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Vorpal Syndrome",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Null-Field Exposure",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Migraine",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "alienPatient6": {
+        "title": "Unknown Patient",
+        "story": "Patient BM-4 drifts upward when standing and describes tasting music. Your reference materials have no record of this. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Null-Field Exposure",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Vorpal Syndrome",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "alienPatient7": {
+        "title": "Unknown Patient",
+        "story": "Patient YP-9 appears to glow softly in dim light and makes a vibrating hum with each exhale. Your reference materials have no record of this. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Vorpal Syndrome",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Null-Field Exposure",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Pneumonia",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "alienPatient8": {
+        "title": "Unknown Patient",
+        "story": "Patient LX-3 rose to the ceiling spontaneously and can identify colors by their smell. Your reference materials have no record of this. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Null-Field Exposure",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Vorpal Syndrome",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "alienPatient9": {
+        "title": "Unknown Patient",
+        "story": "Patient WZ-6 has luminous blue patterns spreading across their skin and a constant resonant hum. Your reference materials have no record of this. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Vorpal Syndrome",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Null-Field Exposure",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Migraine",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "alienPatient10": {
+        "title": "Unknown Patient",
+        "story": "Patient FC-8 keeps briefly levitating and insists they can hear the color red. Your reference materials have no record of this. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Null-Field Exposure",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Vorpal Syndrome",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Pneumonia",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "medSchoolStart": {
+        "title": "Medical School — Full Reference",
+        "story": "Study the complete disease reference table. You will return to your shift automatically in 30 seconds.",
+        "chart": "<table>\n                <tr><th>Disease</th><th>Symptoms</th></tr>\n                <tr><td>Pneumonia</td><td>Coughing, Fever, Chills, Shortness of breath</td></tr>\n                <tr><td>Stroke</td><td>Weakness in one arm, Slurred speech</td></tr>\n                <tr><td>Heart Attack</td><td>Chest pain, Shortness of breath</td></tr>\n                <tr><td>Anxiety Attack</td><td>Rapid heart rate, Sweating, Trembling</td></tr>\n                <tr><td>Migraine</td><td>Throbbing one-sided headache, Light sensitivity</td></tr>\n                <tr><td>Flu</td><td>Fever, Sore throat, Runny nose, Dry cough</td></tr>\n                <tr><td colspan=\"2\" style=\"padding-top:8px;font-style:italic;color:#888\">Alien Diseases</td></tr>\n                <tr><td>Vorpal Syndrome</td><td>Glowing blue skin patches, Low-frequency humming</td></tr>\n                <tr><td>Null-Field Exposure</td><td>Spontaneous levitation, Hearing colors (cross-sensory)</td></tr>\n            </table>",
+        "choices": [
+          {
+            "text": "Return to shift early",
+            "next": "__return__"
+          }
+        ],
+        "autoAdvance": {
+          "delay": 30000,
+          "next": "__return__"
+        }
+      },
+      "medSchool_alien": {
+        "title": "Medical School — Alien Diseases",
+        "story": "Review the alien disease reference table below.",
+        "chart": "<table>\n                <tr><th>Disease</th><th>Symptoms</th></tr>\n                <tr><td>Vorpal Syndrome</td><td>Glowing blue skin patches, Low-frequency humming</td></tr>\n                <tr><td>Null-Field Exposure</td><td>Spontaneous levitation, Hearing colors (cross-sensory)</td></tr>\n            </table>",
+        "choices": [
+          {
+            "text": "Return to break",
+            "next": "__return__"
+          }
+        ]
+      },
+      "medSchool_dose1": {
+        "title": "Medical School: Dosage Calculation",
+        "story": "A patient weighs 60 kg. The prescribed medication requires 0.5 mg per kg. What is the correct total dose in mg? (Hint: 60 × 0.5)",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 30,
+            "nextScene": "__return__",
+            "hint": "Multiply the weight (60 kg) by the dose per kg (0.5 mg)."
+          }
+        ]
+      },
+      "medSchool_dose2": {
+        "title": "Medical School: Dosage Calculation",
+        "story": "A patient weighs 70 kg. The prescribed medication requires 0.5 mg per kg. What is the correct total dose in mg? (Hint: 70 × 0.5)",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 35,
+            "nextScene": "__return__",
+            "hint": "Multiply the weight (70 kg) by the dose per kg (0.5 mg)."
+          }
+        ]
+      },
+      "uberStart": {
+        "title": "Ride Sharing: New Shift",
+        "story": "Drive your car (🚗) to pick up customers (🧍). A new customer appears every 5 seconds. You have 60 seconds — pick up as many as you can!",
+        "choices": [
+          {
+            "text": "Start driving",
+            "next": "uberDrive"
+          }
+        ],
+        "autoAdvance": {
+          "delay": 5000,
+          "next": "uberDrive"
+        }
+      },
+      "uberDrive": {
+        "title": "Ride Sharing: On the Road",
+        "story": "Use arrow keys to move.",
+        "actionItems": [
+          {
+            "type": "uberGame",
+            "nextScene": "__return__"
+          }
+        ]
+      },
+      "shiftTransition": {
+        "title": "Starting Next Shift",
+        "story": "Get ready — your next patients are waiting.",
+        "autoAdvance": {
+          "delay": 5000,
+          "next": "__nextPatient__"
+        }
+      },
+      "dayTransition": {
+        "title": "Day Complete!",
+        "story": "Rest up. Tomorrow starts soon.",
+        "autoAdvance": {
+          "delay": 5000,
+          "next": "__nextPatient__"
+        }
+      },
+      "patient21": {
+        "title": "Patient ID: 21",
+        "story": "Elena, 55, has had a high fever, productive cough, and chills for three days. She is short of breath. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Pneumonia",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Migraine",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient22": {
+        "title": "Patient ID: 22",
+        "story": "Marcus, 44, requires a blood thinner before hip surgery. His weight is 80 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 40,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 80 kg × 0.5 mg/kg."
+          }
+        ]
+      },
+      "patient23": {
+        "title": "Patient ID: 23",
+        "story": "Yuki, 68, suddenly cannot move her right arm and is slurring her words. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Pneumonia",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient24": {
+        "title": "Patient ID: 24",
+        "story": "Luca, 61, needs a diuretic for congestive heart failure. His weight is 120 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 60,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 120 kg × 0.5 mg/kg."
+          }
+        ]
+      },
+      "patient25": {
+        "title": "Patient ID: 25",
+        "story": "Fatima, 50, has crushing chest pain radiating to her left arm and is pale and sweaty. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient26": {
+        "title": "Patient ID: 26",
+        "story": "Ravi, 36, needs a sedative before an MRI. His weight is 65 kg and the prescribed dose is 1 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 65,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 65 kg × 1 mg/kg."
+          }
+        ]
+      },
+      "patient27": {
+        "title": "Patient ID: 27",
+        "story": "Nadia, 29, is shaking, sweating, and her heart is racing. She says the feeling came on suddenly with no clear cause. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Heart Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient28": {
+        "title": "Patient ID: 28",
+        "story": "Owen, 73, needs an analgesic infusion after knee replacement. His weight is 85 kg and the prescribed dose is 1 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 85,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 85 kg × 1 mg/kg."
+          }
+        ]
+      },
+      "patient29": {
+        "title": "Patient ID: 29",
+        "story": "Sera, 31, has a severe one-sided headache with nausea and cannot tolerate any light or sound. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Migraine",
+            "next": "__nextPatient__",
+            "correct": true
+          },
+          {
+            "text": "Stroke",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Flu",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Anxiety Attack",
+            "next": "__nextPatient__",
+            "correct": false
+          },
+          {
+            "text": "Skip (no reward / no penalty)",
+            "next": "__nextPatient__",
+            "skip": true
+          }
+        ]
+      },
+      "patient30": {
+        "title": "Patient ID: 30",
+        "story": "Jin, 58, requires an anticoagulant after a cardiac procedure. His weight is 70 kg and the prescribed dose is 1.1 mg per kg. Calculate the correct total dose in mg.",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 77,
+            "nextScene": "__nextPatient__",
+            "hint": "Multiply 70 kg × 1.1 mg/kg."
+          }
+        ]
+      },
+      "tutorialIntro": {
+        "title": "Welcome to the Work Simulator",
+        "story": "You are a hospital doctor working a 5-day week. Each shift you will see patients, diagnose illnesses, and calculate medication doses. During breaks you can earn extra money through side jobs. Let's walk through each mechanic now.",
+        "choices": [
+          {
+            "text": "Let's begin the tutorial →",
+            "next": "tutorial_hospital_intro"
+          }
+        ]
+      },
+      "tutorial_hospital_intro": {
+        "title": "Your Main Job: Hospital Doctor",
+        "story": "At the hospital you will see a series of patients. For each patient, read their symptoms carefully and choose the correct diagnosis. A correct diagnosis earns you $15. An incorrect one costs you $5. You may also skip for no reward or penalty.",
+        "choices": [
+          {
+            "text": "Try a diagnosis now →",
+            "next": "tutorial_hospital_patient"
+          }
+        ]
+      },
+      "tutorial_hospital_patient": {
+        "title": "Practice: Diagnose a Patient",
+        "story": "John presents with fever, persistent coughing, and shortness of breath. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Pneumonia (correct)",
+            "next": "tutorial_hospital_dose_intro"
+          },
+          {
+            "text": "Flu",
+            "next": "tutorial_hospital_dose_intro"
+          },
+          {
+            "text": "Stroke",
+            "next": "tutorial_hospital_dose_intro"
+          },
+          {
+            "text": "Heart Attack",
+            "next": "tutorial_hospital_dose_intro"
+          }
+        ]
+      },
+      "tutorial_hospital_dose_intro": {
+        "title": "Dosage Calculation Tasks",
+        "story": "Some patients require a medication dose calculated from their body weight. You will use a slider to select the dose in milligrams. The formula is always: weight (kg) × dose per kg (mg/kg) = total dose (mg).",
+        "choices": [
+          {
+            "text": "Try a dosage calculation →",
+            "next": "tutorial_hospital_dose"
+          }
+        ]
+      },
+      "tutorial_hospital_dose": {
+        "title": "Practice: Calculate a Dose",
+        "story": "A patient weighs 80 kg. The prescribed medication requires 0.5 mg per kg. Move the slider to the correct total dose in mg. (Hint: 80 × 0.5 = 40)",
+        "actionItems": [
+          {
+            "type": "slider",
+            "correctValue": 40,
+            "nextScene": "tutorial_tele_intro",
+            "hint": "Multiply 80 kg × 0.5 mg/kg."
+          }
+        ]
+      },
+      "tutorial_tele_intro": {
+        "title": "Side Job: Telemedicine",
+        "story": "Between shifts you can take side jobs. Telemedicine lets you consult with remote patients and earn $5 per session. It is the most similar to your hospital work. Try a telemedicine case now.",
+        "choices": [
+          {
+            "text": "Open a telemedicine case →",
+            "next": "tutorial_tele_case"
+          }
+        ]
+      },
+      "tutorial_tele_case": {
+        "title": "Telemedicine Practice",
+        "story": "A remote patient reports a sudden throbbing headache on one side that worsens with light. What is your diagnosis?",
+        "choices": [
+          {
+            "text": "Migraine",
+            "next": "tutorial_tele_correct"
+          },
+          {
+            "text": "Flu",
+            "next": "tutorial_tele_wrong"
+          }
+        ]
+      },
+      "tutorial_tele_correct": {
+        "title": "Correct!",
+        "story": "Great — Migraine is right. The one-sided throbbing headache and light sensitivity are classic signs. You've earned your telemedicine bonus.",
+        "choices": [
+          {
+            "text": "Next →",
+            "next": "tutorial_uber_intro"
+          }
+        ]
+      },
+      "tutorial_tele_wrong": {
+        "title": "Incorrect",
+        "story": "Not quite — the correct answer is Migraine (one-sided throbbing headache, light sensitivity). Keep the reference chart in mind! Moving on.",
+        "choices": [
+          {
+            "text": "Next →",
+            "next": "tutorial_uber_intro"
+          }
+        ]
+      },
+      "tutorial_uber_intro": {
+        "title": "Side Job: Ride Sharing",
+        "story": "Ride Sharing lets you drive (🚗) and pick up customers (🧍) on a city grid using the arrow keys. Each pickup earns you money. You have 60 seconds per shift. Let's do a quick drive.",
+        "choices": [
+          {
+            "text": "Start driving →",
+            "next": "tutorial_uber_drive"
+          }
+        ],
+        "autoAdvance": {
+          "delay": 6000,
+          "next": "tutorial_uber_drive"
+        }
+      },
+      "tutorial_uber_drive": {
+        "title": "Ride Sharing: Practice Drive",
+        "story": "Use arrow keys to steer. Pick up as many customers as you can!",
+        "actionItems": [
+          {
+            "type": "uberGame",
+            "nextScene": "tutorial_medschool_intro"
+          }
+        ]
+      },
+      "tutorial_medschool_intro": {
+        "title": "Side Job: Medical School",
+        "story": "Medical School gives you free access to the full disease reference table — useful when you encounter unfamiliar conditions. There is no monetary reward, but the knowledge pays off. Let's take a quick look.",
+        "choices": [
+          {
+            "text": "Open the reference table →",
+            "next": "tutorial_medschool"
+          }
+        ]
+      },
+      "tutorial_medschool": {
+        "title": "Medical School — Full Reference",
+        "story": "Study the disease reference below. It will disappear in 15 seconds, or you can continue early.",
+        "chart": "<table>\n                <tr><th>Disease</th><th>Symptoms</th></tr>\n                <tr><td>Pneumonia</td><td>Coughing, Fever, Chills, Shortness of breath</td></tr>\n                <tr><td>Stroke</td><td>Weakness in one arm, Slurred speech</td></tr>\n                <tr><td>Heart Attack</td><td>Chest pain, Shortness of breath</td></tr>\n                <tr><td>Anxiety Attack</td><td>Rapid heart rate, Sweating, Trembling</td></tr>\n                <tr><td>Migraine</td><td>Throbbing one-sided headache, Light sensitivity</td></tr>\n                <tr><td>Flu</td><td>Fever, Sore throat, Runny nose, Dry cough</td></tr>\n                <tr><td>Vorpal Syndrome</td><td>Glowing blue skin patches, Low-frequency humming</td></tr>\n                <tr><td>Null-Field Exposure</td><td>Spontaneous levitation, Hearing colors</td></tr>\n            </table>",
+        "choices": [
+          {
+            "text": "Continue →",
+            "next": "tutorial_pay_explain"
+          }
+        ],
+        "autoAdvance": {
+          "delay": 15000,
+          "next": "tutorial_pay_explain"
+        }
+      },
+      "tutorial_pay_explain": {
+        "title": "How Pay Works",
+        "story": "Here is a summary of your earnings: Correct hospital diagnosis = +$15 | Wrong diagnosis = -$5 | Skip = $0 | Correct telemedicine = +$5 | Ride Sharing pickups = variable | Medical School = $0 (knowledge only). Your total reward is shown in the sidebar at all times.",
+        "choices": [
+          {
+            "text": "I'm ready — begin Phase 1 →",
+            "next": "__phaseEnd__"
+          }
+        ]
+      },
+      "phase1Intro": {
+        "title": "Phase 1 — Begin Your Week",
+        "story": "Welcome to Phase 1. You will work 5 days, 3 shifts per day, seeing 2 patients per shift (30 patients total). During each break you can choose a side job or rest. Good luck!",
+        "choices": [
+          {
+            "text": "Start my first shift →",
+            "next": "__nextPatient__"
+          }
+        ]
+      },
+      "phase3Intro": {
+        "title": "Phase 3 — New Patient Cohort",
+        "story": "Welcome to Phase 3. You will see a fresh set of patients over another 5-day week. Apply everything you have learned. Side jobs are available during breaks as before.",
+        "choices": [
+          {
+            "text": "Start Phase 3 →",
+            "next": "__nextPatient__"
+          }
+        ]
+      }
+    }
+  }

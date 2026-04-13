@@ -3,7 +3,7 @@
 // =============================================================================
 
 const PHASE_CONFIG = {
-    INACTIVITY_TIMEOUT_SECONDS: 999999,   // effectively disables inactivity auto-skip
+    INACTIVITY_TIMEOUT_SECONDS: 30,        // seconds before inactive patient is auto-skipped
     TELELOGIN_ENABLED: false,              // bypass password login for telemedicine
 
     phaseOrder: [0, 1, 3],
@@ -25,7 +25,7 @@ const PHASE_CONFIG = {
             shiftsPerDay: 3,
             patientsPerShift: 2,
             daysCount: 5,
-            sideJobMenu: ['telemedicine', 'medschool', 'uber'],
+            sideJobMenu: ['telemedicine'],          // Phase 1: telemedicine + break only
             patientPool: 'PHASE1_PATIENTS',
             startScene: 'phase1Intro'
         },
@@ -54,7 +54,7 @@ const PHASE1_PATIENTS = [
 ];
 
 const PHASE3_PATIENTS = [
-    'patient21','patient22','patient23','patient24','patient25',
+    'patient2','patient22','patient23','patient24','patient25',
     'patient26','patient27','patient28','patient29','patient30',
     'alienPatient1','alienPatient2','alienPatient3','alienPatient4','alienPatient5',
     'alienPatient6','alienPatient7','alienPatient8','alienPatient9','alienPatient10',
@@ -66,6 +66,14 @@ const PATIENT_POOLS = {
     TUTORIAL_PATIENTS: TUTORIAL_PATIENTS,
     PHASE1_PATIENTS:   PHASE1_PATIENTS,
     PHASE3_PATIENTS:   PHASE3_PATIENTS
+};
+
+
+// Telemedicine scene pools for Phase 3 transferability conditions.
+// Change entries here to swap which scenes each condition uses.
+const TRANSFERABILITY_SCENES = {
+    low:  ['telemedicine1', 'telemedicine2'],          // human diseases only
+    high: ['telemedicine1_alien', 'telemedicine2_alien'] // alien diseases only
 };
 
 
@@ -495,6 +503,7 @@ class MainJobGameInstance extends GameInstance {
         this._inactivityCountdownInterval = null;
         this.timerStartMs = null;
         this.sideJobStartTime = null;
+        this.transferabilityMode = null;  // null unless phase 3: 0 = low, 1 = high
     }
 
     get totalReward() {
@@ -534,13 +543,11 @@ class MainJobGameInstance extends GameInstance {
         this.timerStartMs = Date.now();
     }
 
-    setInactivityTimer(callback, seconds = 5) {
+    setInactivityTimer(callback) {
         clearTimeout(this.inactivityTimeout);
         clearInterval(this._inactivityCountdownInterval);
         const el = document.getElementById('break-timer');
-        // PHASE_CONFIG.INACTIVITY_TIMEOUT_SECONDS overrides the per-scene timeout
-        const effectiveSeconds = (PHASE_CONFIG.INACTIVITY_TIMEOUT_SECONDS < 9999)
-            ? PHASE_CONFIG.INACTIVITY_TIMEOUT_SECONDS : seconds;
+        const effectiveSeconds = PHASE_CONFIG.INACTIVITY_TIMEOUT_SECONDS;
         let remaining = effectiveSeconds;
         if (el) el.textContent = 'Time remaining: ' + remaining + 's';
         this._inactivityCountdownInterval = setInterval(() => {
@@ -715,7 +722,7 @@ class MainJobGameInstance extends GameInstance {
             patient21:'Pneumonia', patient23:'Stroke', patient25:'Heart Attack',
             patient27:'Anxiety Attack', patient29:'Migraine',
             patient22:'40 mg', patient24:'60 mg', patient26:'65 mg',
-            patient28:'85 mg', patient30:'105 mg',
+            patient28:'85 mg', patient30:'77 mg',
             alienPatient1:'Vorpal Syndrome', alienPatient2:'Null-Field Exposure',
             alienPatient3:'Vorpal Syndrome', alienPatient4:'Null-Field Exposure',
             alienPatient5:'Vorpal Syndrome', alienPatient6:'Null-Field Exposure',
@@ -784,6 +791,9 @@ class MainJobGameInstance extends GameInstance {
         const SPEED        = CELL * 2.8; // pixels per second
         const SNAP         = CELL * 0.42; // px threshold to detect intersection
 
+        const W      = GRID * CELL;
+        const H      = GRID * CELL;
+
         const PARKS  = new Set(['0,0','1,0','0,1','9,0','9,1','4,3','5,3','4,4','6,7','3,8']);
         const CAMPUS = new Set(['3,3','5,4','6,3','3,4']);
 
@@ -803,7 +813,6 @@ class MainJobGameInstance extends GameInstance {
         container.appendChild(canvas);
 
         const ctx = canvas.getContext('2d');
-        const W = canvas.width, H = canvas.height;
 
         // Car starts on an intersection
         let px = 4 * CELL, py = 5 * CELL;
@@ -1051,6 +1060,8 @@ class MainJobGameInstance extends GameInstance {
         if (sceneKey === '__phaseEnd__') {
             this.stopTimer();
             clearInterval(this.continuousWorkInterval);
+            // Store phase data immediately (captures accurate elapsed time)
+            this.storeGameData();
             const titleEl = document.getElementById('scene-title');
             const storyEl = document.getElementById('scene-story');
             const chartEl = document.getElementById('disease-chart');
@@ -1104,6 +1115,7 @@ class MainJobGameInstance extends GameInstance {
 
         if (sceneKey === '__nextPatient__') {
             sceneKey = this.resolveNextPatient();
+            if (sceneKey === '__phaseEnd__') { this.displayScene('__phaseEnd__'); return; }
         }
 
         // Day transition: update dynamic title/story and reset clock
@@ -1125,20 +1137,31 @@ class MainJobGameInstance extends GameInstance {
         const scene = this.scenes[sceneKey];
         const breakItem = scene.actionItems && scene.actionItems.find(i => i.type === 'breakTimer');
 
+        // Shuffle choices for diagnosis/telemedicine scenes (any scene where choices carry correct flags)
+        let savedChoices = null;
+        if (scene.choices && scene.choices.some(c => c.hasOwnProperty('correct'))) {
+            savedChoices = scene.choices;
+            const shuffled = scene.choices.slice();
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                const tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+            }
+            scene.choices = shuffled;
+        }
+
         super.displayScene(sceneKey);
+
+        if (savedChoices) scene.choices = savedChoices;   // restore original order
         this.updateTotalRewardDisplay();
 
         // Inactivity timer for interactive pages that don't have their own autoAdvance
         // teleLogin gets 15s; slider gets 30s; all other interactive scenes get 5s
         if (!scene.autoAdvance) {
             const hasChoices = scene.choices && scene.choices.length > 0;
-            const hasTeleLogin = scene.actionItems && scene.actionItems.some(i => i.type === 'teleLogin');
-            const hasSlider = scene.actionItems && scene.actionItems.some(i => i.type === 'slider');
             const hasInteractiveItems = scene.actionItems && scene.actionItems.some(
                 i => i.type === 'slider' || i.type === 'teleLogin'
             );
             if (hasChoices || hasInteractiveItems) {
-                const inactivitySeconds = hasTeleLogin ? 15 : hasSlider ? 30 : 5;
                 this.setInactivityTimer(() => {
                     const storyEl = document.getElementById('scene-story');
                     if (this.onSideJob) {
@@ -1177,7 +1200,7 @@ class MainJobGameInstance extends GameInstance {
                         if (storyEl) storyEl.textContent = 'Inactive — skipping to next patient.';
                         setTimeout(() => this.displayScene('__nextPatient__'), 800);
                     }
-                }, inactivitySeconds);
+                });
             }
         }
 
@@ -1228,6 +1251,19 @@ class MainJobGameInstance extends GameInstance {
         const shiftEl = document.getElementById('shift-display');
         if (dayEl)   dayEl.textContent   = DAY_NAMES[this.dayIndex] || 'Friday';
         if (shiftEl) shiftEl.textContent = 'Shift ' + (this.shiftIndex + 1) + ' of 3';
+    }
+
+    updateTransferabilityDisplay() {
+        const el = document.getElementById('transferability-display');
+        if (!el) return;
+        if (this.transferabilityMode === null) {
+            el.textContent = '';
+            el.style.display = 'none';
+        } else {
+            const label = this.transferabilityMode === 1 ? 'High Transferability' : 'Low Transferability';
+            el.textContent = label;
+            el.style.display = '';
+        }
     }
 
     startAutoAdvanceCountdown(seconds) {
@@ -1492,7 +1528,13 @@ class MainJobGameInstance extends GameInstance {
         this.updateCurrentJobDisplay();
         const lookupKey = sceneLookupKey || returnScene;
         let startScene;
-        if (job.startScenes && job.startScenes.length > 0) {
+        // For telemedicine in phase 3, route to transferability-specific scenes
+        if (job.id === 'telemedicine' && this.phaseId === 3 && this.transferabilityMode !== null) {
+            const pool = this.transferabilityMode === 1
+                ? TRANSFERABILITY_SCENES.high
+                : TRANSFERABILITY_SCENES.low;
+            startScene = pool[Math.floor(Math.random() * pool.length)];
+        } else if (job.startScenes && job.startScenes.length > 0) {
             startScene = job.startScenes[Math.floor(Math.random() * job.startScenes.length)];
         } else {
             startScene = job.startScene ||
@@ -1512,12 +1554,25 @@ class MainJobGameInstance extends GameInstance {
     }
 
     storeGameData() {
-        super.storeGameData();
-        Qualtrics.SurveyEngine.setEmbeddedData('totalReward', this.totalReward);
-        Qualtrics.SurveyEngine.setEmbeddedData('continuousWorkTime', this.continuousWorkTime);
-        Qualtrics.SurveyEngine.setEmbeddedData('accuracy', this.accuracy);
-        Qualtrics.SurveyEngine.setEmbeddedData('patientResults', JSON.stringify(this.patientResults));
-        Qualtrics.SurveyEngine.setEmbeddedData('sideJobSessions', JSON.stringify(this.sideJobSessions));
+        // Phase 0 (tutorial) data is not stored
+        if (this.phaseId === 0) return;
+        const prefix = 'p' + this.phaseId + '_';
+        const elapsedSec = this.startTime ? Math.floor((Date.now() - this.startTime) / 1000) : 0;
+        try {
+            const QSE = Qualtrics.SurveyEngine;
+            QSE.setEmbeddedData(prefix + 'gameDuration',         elapsedSec);
+            QSE.setEmbeddedData(prefix + 'finalScore',           this.score);
+            QSE.setEmbeddedData(prefix + 'telemedicineSessions', this.telemedicineCount);
+            QSE.setEmbeddedData(prefix + 'totalReward',          this.totalReward);
+            QSE.setEmbeddedData(prefix + 'continuousWorkTime',   this.continuousWorkTime);
+            QSE.setEmbeddedData(prefix + 'patientResults',       JSON.stringify(this.patientResults));
+            QSE.setEmbeddedData(prefix + 'sideJobSessions',      JSON.stringify(this.sideJobSessions));
+            if (this.transferabilityMode !== null) {
+                QSE.setEmbeddedData('transferability', this.transferabilityMode);
+            }
+        } catch(e) {
+            console.warn('storeGameData: Qualtrics not available', e);
+        }
     }
 
     getStats() {
@@ -1570,7 +1625,15 @@ class MainJobGameInstance extends GameInstance {
         // Restore showGameView (may have been suppressed by showIntroScreen)
         delete this.showGameView;
 
+        // Assign transferability mode for Phase 3 only
+        if (this.phaseId === 3) {
+            this.transferabilityMode = Math.random() < 0.5 ? 0 : 1;
+        } else {
+            this.transferabilityMode = null;
+        }
+
         this.updateDayDisplay();
+        this.updateTransferabilityDisplay();
         super.start();
         this.startContinuousWorkTimer();
     }
@@ -1631,7 +1694,7 @@ function buildAllSideJobs() {
             id: 'uber',
             name: 'Ride Sharing',
             actionItem: 'driving',
-            reward: 5,
+            reward: .5,
             similarity: 0.3,
             startScene: 'uberStart'
         })
@@ -1893,6 +1956,99 @@ const TELEMEDICINE_SCENES = {
             actionItems: [{ type: 'incrementTelemedicine' }],
             choices: [{ text: "Return to Break room", next: '__return__' }]
         },
+
+        // ── High-transferability telemedicine (alien diseases only) ─────────
+        telemedicine1_alien: {
+            title: "Telemedicine Session 1",
+            story: "Welcome to your first telemedicine session. Enter your session password to access the portal.",
+            actionItems: [{ type: 'teleLogin', nextScene: 'teleAlien1_1' }]
+        },
+        teleAlien1_1: {
+            title: "Telemedicine Patient 1",
+            story: "A patient reports patches of glowing blue skin and hears a constant low-frequency hum. What is your diagnosis?",
+            choices: [
+                { text: "Vorpal Syndrome",    next: 'teleAlien1_1Correct' },
+                { text: "Null-Field Exposure", next: 'teleAlien1_1Wrong'   }
+            ]
+        },
+        teleAlien1_1Correct: {
+            title: "Correct",
+            story: "The glowing blue skin patches and low-frequency humming are classic signs of Vorpal Syndrome. Proceed to the next patient.",
+            actionItems: [{ type: 'incrementTelemedicine' }],
+            choices: [{ text: "Next Telemedicine patient", next: 'teleAlien1_2' }]
+        },
+        teleAlien1_1Wrong: {
+            title: "Incorrect",
+            story: "Those symptoms point to Vorpal Syndrome, not Null-Field Exposure.",
+            actionItems: [{ type: 'incrementTelemedicine' }],
+            choices: [{ text: "Next Telemedicine Patient", next: 'teleAlien1_2' }]
+        },
+        teleAlien1_2: {
+            title: "Telemedicine Patient 2",
+            story: "A patient is spontaneously levitating and reports hearing colors. What is your diagnosis?",
+            choices: [
+                { text: "Null-Field Exposure", next: 'teleAlien1_2Correct' },
+                { text: "Vorpal Syndrome",      next: 'teleAlien1_2Wrong'   }
+            ]
+        },
+        teleAlien1_2Correct: {
+            title: "Correct",
+            story: "Spontaneous levitation and cross-sensory perception (hearing colors) indicate Null-Field Exposure.",
+            actionItems: [{ type: 'incrementTelemedicine' }],
+            choices: [{ text: "Return to Break room", next: '__return__' }]
+        },
+        teleAlien1_2Wrong: {
+            title: "Incorrect",
+            story: "Those symptoms indicate Null-Field Exposure, not Vorpal Syndrome.",
+            actionItems: [{ type: 'incrementTelemedicine' }],
+            choices: [{ text: "Return to Break room", next: '__return__' }]
+        },
+        telemedicine2_alien: {
+            title: "Telemedicine Session 2",
+            story: "Welcome back to the telemedicine portal. Enter your session password to continue.",
+            actionItems: [{ type: 'teleLogin', nextScene: 'teleAlien2_1' }]
+        },
+        teleAlien2_1: {
+            title: "Telemedicine Patient 2.1",
+            story: "A patient has vivid glowing patches spreading across their skin and complains of a persistent low hum they can feel in their bones. What is your diagnosis?",
+            choices: [
+                { text: "Vorpal Syndrome",    next: 'teleAlien2_1Correct' },
+                { text: "Null-Field Exposure", next: 'teleAlien2_1Wrong'   }
+            ]
+        },
+        teleAlien2_1Correct: {
+            title: "Correct",
+            story: "Glowing skin patches and low-frequency humming confirm Vorpal Syndrome. Proceed to the next patient.",
+            actionItems: [{ type: 'incrementTelemedicine' }],
+            choices: [{ text: "Next Telemedicine patient", next: 'teleAlien2_2' }]
+        },
+        teleAlien2_1Wrong: {
+            title: "Incorrect",
+            story: "Those symptoms point to Vorpal Syndrome, not Null-Field Exposure.",
+            actionItems: [{ type: 'incrementTelemedicine' }],
+            choices: [{ text: "Next Telemedicine Patient", next: 'teleAlien2_2' }]
+        },
+        teleAlien2_2: {
+            title: "Telemedicine Patient 2.2",
+            story: "A patient calls in claiming they just floated off their chair and are now experiencing visual sounds. What is your diagnosis?",
+            choices: [
+                { text: "Null-Field Exposure", next: 'teleAlien2_2Correct' },
+                { text: "Vorpal Syndrome",      next: 'teleAlien2_2Wrong'   }
+            ]
+        },
+        teleAlien2_2Correct: {
+            title: "Correct",
+            story: "Spontaneous levitation and synesthetic perception are hallmarks of Null-Field Exposure.",
+            actionItems: [{ type: 'incrementTelemedicine' }],
+            choices: [{ text: "Return to Break room", next: '__return__' }]
+        },
+        teleAlien2_2Wrong: {
+            title: "Incorrect",
+            story: "Those symptoms indicate Null-Field Exposure, not Vorpal Syndrome.",
+            actionItems: [{ type: 'incrementTelemedicine' }],
+            choices: [{ text: "Return to Break room", next: '__return__' }]
+        },
+
         patient5: {
             title: "Patient ID: 5",
             story: "Alex, 38, requires a beta-blocker for a cardiac arrhythmia. His weight is 70 kg and the prescribed dose is 0.5 mg per kg. Calculate the correct total dose in mg.",
@@ -2302,9 +2458,9 @@ const TELEMEDICINE_SCENES = {
         },
         patient30: {
             title: "Patient ID: 30",
-            story: "Jin, 58, requires an anticoagulant after a cardiac procedure. His weight is 70 kg and the prescribed dose is 1.5 mg per kg. Calculate the correct total dose in mg.",
+            story: "Jin, 58, requires an anticoagulant after a cardiac procedure. His weight is 70 kg and the prescribed dose is 1.1 mg per kg. Calculate the correct total dose in mg.",
             actionItems: [
-                { type: 'slider', correctValue: 105, nextScene: '__nextPatient__', hint: 'Multiply 70 kg × 1.5 mg/kg.' }
+                { type: 'slider', correctValue: 77, nextScene: '__nextPatient__', hint: 'Multiply 70 kg × 1.1 mg/kg.' }
             ]
         },
 
@@ -2391,8 +2547,6 @@ const TELEMEDICINE_SCENES = {
                 <tr><td>Anxiety Attack</td><td>Rapid heart rate, Sweating, Trembling</td></tr>
                 <tr><td>Migraine</td><td>Throbbing one-sided headache, Light sensitivity</td></tr>
                 <tr><td>Flu</td><td>Fever, Sore throat, Runny nose, Dry cough</td></tr>
-                <tr><td>Vorpal Syndrome</td><td>Glowing blue skin patches, Low-frequency humming</td></tr>
-                <tr><td>Null-Field Exposure</td><td>Spontaneous levitation, Hearing colors</td></tr>
             </table>`,
             choices: [{ text: "Continue →", next: 'tutorial_pay_explain' }],
             autoAdvance: { delay: 15000, next: 'tutorial_pay_explain' }
@@ -2411,7 +2565,7 @@ const TELEMEDICINE_SCENES = {
         },
         phase3Intro: {
             title: "Phase 3 — New Patient Cohort",
-            story: "Welcome to Phase 3. You will see a fresh set of patients over another 5-day week. Apply everything you have learned. Side jobs are available during breaks as before.",
+            story: "Welcome to Phase 3. You will see a fresh set of patients over another 5-day week. Side jobs are available during breaks as before. This phase introduces a transferability condition: you have been randomly assigned to either High Transferability (your Telemedicine cases will feature a different type of patient) or Low Transferability (Telemedicine cases match your hospital patients). Your assigned condition is shown at the top of the screen.",
             choices: [{ text: "Start Phase 3 →", next: '__nextPatient__' }]
         }
     }
